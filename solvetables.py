@@ -1,4 +1,5 @@
 import argparse
+from collections import defaultdict
 import ipaddress
 import re
 import shlex
@@ -100,6 +101,9 @@ class Rule:
 
     def get_target(self):
         return self.args.jump
+
+    def get_chain(self):
+        return self.args.append
 
     def _fix_not_rule(self, rule: str) -> str:
         return rule.replace("! --", "--not-").replace("! -", "-n")
@@ -237,7 +241,7 @@ class Rule:
 class SolveTables:
     def __init__(self, default_policy: str) -> None:
         self.accept_default = default_policy == "ACCEPT"
-        self.rules: list[Rule] = []
+        self.chain_rules: dict[str, list[Rule]] = defaultdict(list)
         self.src_ip_model: BitVecRef = BitVec("src_ip_model", 32)
         self.dst_ip_model: BitVecRef = BitVec("dst_ip_model", 32)
         self.input_interface_model: BitVecRef = BitVec("input_interface_model", 8)
@@ -249,7 +253,8 @@ class SolveTables:
         self.iptables_parser: argparse.ArgumentParser = create_iptables_argparse()
 
     def add_rule(self, rule: str):
-        self.rules.append(Rule(rule))
+        new_rule = Rule(rule)
+        self.chain_rules[new_rule.get_chain()].append(new_rule)
 
     def _get_base_constraints(self) -> Probe | BoolRef:
         base_rules = And(
@@ -260,11 +265,11 @@ class SolveTables:
         )
         return base_rules
 
-    def build_constraints(self) -> Probe | BoolRef:
+    def build_constraints(self, chain: str) -> Probe | BoolRef:
         # print("self.constraints:", self.constraints)
         previous_rules = []
         rules = []
-        for rule in self.rules:
+        for rule in self.chain_rules[chain]:
             target = rule.get_target()
             constraints = rule.get_constraints(self)
             if target == "ACCEPT":
@@ -281,10 +286,12 @@ class SolveTables:
         # return And(Or(rules), base_rules)
         return simplify(And(Or(rules), base_rules))
 
-    def check_and_get_model(self, constraints: (Probe | BoolRef)) -> None | ModelRef:
+    def check_and_get_model(
+        self, chain: str, constraints: (Probe | BoolRef)
+    ) -> None | ModelRef:
         m = None
         s = Solver()
-        rules = self.build_constraints()
+        rules = self.build_constraints(chain)
         # print("rules:", rules)
         s.add(constraints, rules)
         result = s.check()
@@ -324,9 +331,9 @@ class SolveTables:
         }
         return translated_model
 
-    def identify_rule(self, model: ModelRef) -> None | str:
+    def identify_rule(self, chain: str, model: ModelRef) -> None | str:
         s = Solver()
-        for rule in self.rules:
+        for rule in self.chain_rules[chain]:
             rule_constraints = rule.get_constraints(self)
             if rule_constraints is not None:
                 s.add(rule_constraints)
@@ -441,15 +448,15 @@ def main():
     st = SolveTables(default_policy=default_policy)
 
     for rule_line in iptables_rules_file.splitlines():
-        if rule_line.startswith(f"-A {args.chain}"):
-            # print(rule_line)
+        if rule_line.startswith("-A "):
+            print(rule_line)
             st.add_rule(rule_line)
 
     expression = (
         args.expression[0].split() if len(args.expression) == 1 else args.expression
     )
     additional_constraints = st.translate_expression(expression)
-    model = st.check_and_get_model(constraints=additional_constraints)
+    model = st.check_and_get_model(chain=args.chain, constraints=additional_constraints)
     if model is not None:
         print("The identified model is:")
         print(model)
@@ -459,7 +466,7 @@ def main():
         for k, v in translated_model.items():
             print(f"  {k}: {v}")
         print()
-        rule = st.identify_rule(model)
+        rule = st.identify_rule(chain=args.chain, model=model)
         if rule:
             print(f"The iptabeles rule hit is:")
             print(rule)
