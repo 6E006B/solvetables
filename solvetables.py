@@ -53,7 +53,7 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     return parser
 
 
-class SolveTables:
+class Rule:
     PROTOCOL_ENUM = [
         "all",
         "tcp",
@@ -68,22 +68,26 @@ class SolveTables:
     ]
     CHAIN_ENUM = ["INPUT", "FORWARD", "OUTPUT"]
     STATE_ENUM = ["NEW", "RELATED", "ESTABLISHED"]
+    INTERFACE_ENUM = []
+    IPTABLES_PARSER = create_iptables_argparse()
 
-    def __init__(self, default_policy: str) -> None:
-        self.accept_default = default_policy == "ACCEPT"
-        self.interface_list: list[str] = []
-        self.constraints: list[(Probe | BoolRef)] = []
-        self.rules: list[str] = []
-        self.targets: list[str] = []
-        self.src_ip_model: BitVecRef = BitVec("src_ip_model", 32)
-        self.dst_ip_model: BitVecRef = BitVec("dst_ip_model", 32)
-        self.input_interface_model: BitVecRef = BitVec("input_interface_model", 8)
-        self.output_interface_model: BitVecRef = BitVec("output_interface_model", 8)
-        self.protocol_model: BitVecRef = BitVec("protocol_model", 4)
-        self.src_port_model: BitVecRef = BitVec("src_port_model", 16)
-        self.dst_port_model: BitVecRef = BitVec("dst_port_model", 16)
-        self.state_model: BitVecRef = BitVec("state_model", 4)
-        self.iptables_parser: argparse.ArgumentParser = create_iptables_argparse()
+    def __init__(self, rule: str):
+        self.iptables_rule = rule
+        rule = self._fix_not_rule(rule)
+        self.args = self.IPTABLES_PARSER.parse_args(rule.split())
+        self.constraints = None
+
+    def get_target(self):
+        return self.args.jump
+
+    def _fix_not_rule(self, rule: str) -> str:
+        return rule.replace("! --", "--not-").replace("! -", "-n")
+
+    @classmethod
+    def _get_or_add_interface_index(cls, interface: str) -> int:
+        if interface not in cls.INTERFACE_ENUM:
+            cls.INTERFACE_ENUM.append(interface)
+        return cls.INTERFACE_ENUM.index(interface)
 
     def _create_ip_constraints(
         self, var: BitVecRef, ip: str, invert: bool = False
@@ -138,84 +142,91 @@ class SolveTables:
             states.append(self.STATE_ENUM.index(s))
         return [Or([var == s for s in states])]
 
-    def _fix_not_rule(self, rule: str) -> str:
-        return rule.replace("! --", "--not-").replace("! -", "-n")
-
-    def _parse_rule(self, rule: str) -> argparse.Namespace:
-        rule = self._fix_not_rule(rule)
-        args = self.iptables_parser.parse_args(rule.split())
-        return args
-
-    def add_rule(self, rule: str):
-        args = self._parse_rule(rule)
-
+    def _build_constraints(self, st: "SolveTables"):
         sub_constraints = []
-        if args.not_source:
-            sub_constraints += self._create_ip_constraints(
-                self.src_ip_model, args.not_source, invert=True
+        if self.args.jump in ["ACCEPT", "REJECT", "DROP"]:
+            if self.args.not_source:
+                sub_constraints += self._create_ip_constraints(
+                    st.src_ip_model, self.args.not_source, invert=True
+                )
+            else:
+                sub_constraints += self._create_ip_constraints(
+                    st.src_ip_model, self.args.source
+                )
+            if self.args.not_source:
+                sub_constraints += self._create_ip_constraints(
+                    st.dst_ip_model, self.args.not_destination, invert=True
+                )
+            else:
+                sub_constraints += self._create_ip_constraints(
+                    st.dst_ip_model, self.args.destination
+                )
+            if self.args.not_in_interface:
+                sub_constraints += self._create_interface_constraints(
+                    st.input_interface_model, self.args.not_in_interface, invert=True
+                )
+            else:
+                sub_constraints += self._create_interface_constraints(
+                    st.input_interface_model, self.args.in_interface
+                )
+            if self.args.not_out_interface:
+                sub_constraints += self._create_interface_constraints(
+                    st.output_interface_model,
+                    self.args.not_out_interface,
+                    invert=True,
+                )
+            else:
+                sub_constraints += self._create_interface_constraints(
+                    st.output_interface_model, self.args.out_interface
+                )
+            sub_constraints += self._create_protocol_constraints(
+                st.protocol_model, self.args.protocol
             )
-        else:
-            sub_constraints += self._create_ip_constraints(
-                self.src_ip_model, args.source
+            sub_constraints += self._create_port_constraints(
+                st.src_port_model, self.args.sport
             )
-        if args.not_source:
-            sub_constraints += self._create_ip_constraints(
-                self.dst_ip_model, args.not_destination, invert=True
+            sub_constraints += self._create_port_constraints(
+                st.dst_port_model, self.args.dport
             )
-        else:
-            sub_constraints += self._create_ip_constraints(
-                self.dst_ip_model, args.destination
-            )
-        if args.not_in_interface:
-            sub_constraints += self._create_interface_constraints(
-                self.input_interface_model, args.not_in_interface, invert=True
-            )
-        else:
-            sub_constraints += self._create_interface_constraints(
-                self.input_interface_model, args.in_interface
-            )
-        if args.not_out_interface:
-            sub_constraints += self._create_interface_constraints(
-                self.output_interface_model, args.not_out_interface, invert=True
-            )
-        else:
-            sub_constraints += self._create_interface_constraints(
-                self.output_interface_model, args.out_interface
-            )
-        sub_constraints += self._create_protocol_constraints(
-            self.protocol_model, args.protocol
-        )
-        sub_constraints += self._create_port_constraints(
-            self.src_port_model, args.sport
-        )
-        sub_constraints += self._create_port_constraints(
-            self.dst_port_model, args.dport
-        )
-        if args.state is not None:
-            sub_constraints += self._create_state_constraints(
-                self.state_model, args.state
-            )
+            if self.args.state is not None:
+                sub_constraints += self._create_state_constraints(
+                    st.state_model, self.args.state
+                )
 
-        constraints = And(sub_constraints)
-
-        if args.jump in ["ACCEPT", "REJECT", "DROP"]:
+            constraints = And(sub_constraints)
             constraints = simplify(constraints)
             # print("adding constraints:", constraints)
-            self.constraints.append(constraints)
-            self.rules.append(rule)
-            self.targets.append(args.jump)
+            self.constraints = constraints
 
-    def _get_or_add_interface_index(self, interface: str) -> int:
-        if interface not in self.interface_list:
-            self.interface_list.append(interface)
-        return self.interface_list.index(interface)
+    def get_constraints(self, st: "SolveTables") -> BoolRef:
+        if self.constraints is None:
+            self._build_constraints(st)
+        return self.constraints
 
-    def _get_base_rules(self) -> Probe | BoolRef:
+
+class SolveTables:
+    def __init__(self, default_policy: str) -> None:
+        self.accept_default = default_policy == "ACCEPT"
+        self.rules: list[Rule] = []
+        self.src_ip_model: BitVecRef = BitVec("src_ip_model", 32)
+        self.dst_ip_model: BitVecRef = BitVec("dst_ip_model", 32)
+        self.input_interface_model: BitVecRef = BitVec("input_interface_model", 8)
+        self.output_interface_model: BitVecRef = BitVec("output_interface_model", 8)
+        self.protocol_model: BitVecRef = BitVec("protocol_model", 4)
+        self.src_port_model: BitVecRef = BitVec("src_port_model", 16)
+        self.dst_port_model: BitVecRef = BitVec("dst_port_model", 16)
+        self.state_model: BitVecRef = BitVec("state_model", 4)
+        self.iptables_parser: argparse.ArgumentParser = create_iptables_argparse()
+
+    def add_rule(self, rule: str):
+        self.rules.append(Rule(rule))
+
+    def _get_base_constraints(self) -> Probe | BoolRef:
         base_rules = And(
-            ULT(self.protocol_model, len(self.PROTOCOL_ENUM)),
-            ULT(self.input_interface_model, len(self.interface_list)),
-            ULT(self.output_interface_model, len(self.interface_list)),
-            ULT(self.state_model, len(self.STATE_ENUM)),
+            ULT(self.protocol_model, len(Rule.PROTOCOL_ENUM)),
+            ULT(self.input_interface_model, len(Rule.INTERFACE_ENUM)),
+            ULT(self.output_interface_model, len(Rule.INTERFACE_ENUM)),
+            ULT(self.state_model, len(Rule.STATE_ENUM)),
         )
         return base_rules
 
@@ -223,17 +234,19 @@ class SolveTables:
         # print("self.constraints:", self.constraints)
         previous_rules = []
         rules = []
-        for i, rule in enumerate(self.constraints):
-            target = self.targets[i]
+        for rule in self.rules:
+            target = rule.get_target()
+            constraints = rule.get_constraints(self)
             if target == "ACCEPT":
                 if previous_rules:
-                    rules.append(And(Not(Or(previous_rules)), rule))
+                    rules.append(And(Not(Or(previous_rules)), constraints))
                 else:
-                    rules.append(rule)
-            previous_rules.append(rule)
+                    rules.append(constraints)
+            if constraints is not None:
+                previous_rules.append(constraints)
         if self.accept_default:
             rules.append(True)
-        base_rules = self._get_base_rules()
+        base_rules = self._get_base_constraints()
 
         # return And(Or(rules), base_rules)
         return simplify(And(Or(rules), base_rules))
@@ -262,45 +275,46 @@ class SolveTables:
             "dst_ip": ipaddress.ip_address(
                 model.eval(self.dst_ip_model, model_completion=True).as_long()
             ),
-            "input_interface": self.interface_list[
+            "input_interface": Rule.INTERFACE_ENUM[
                 model.eval(self.input_interface_model, model_completion=True).as_long()
             ],
-            "output_interface": self.interface_list[
+            "output_interface": Rule.INTERFACE_ENUM[
                 model.eval(self.output_interface_model, model_completion=True).as_long()
             ],
-            "protocol": self.PROTOCOL_ENUM[protocol_index],
+            "protocol": Rule.PROTOCOL_ENUM[protocol_index],
             "src_port": model.eval(
                 self.src_port_model, model_completion=True
             ).as_long(),
             "dst_port": model.eval(
                 self.dst_port_model, model_completion=True
             ).as_long(),
-            "state": self.STATE_ENUM[
+            "state": Rule.STATE_ENUM[
                 model.eval(self.state_model, model_completion=True).as_long()
             ],
         }
         return translated_model
 
     def identify_rule(self, model: ModelRef) -> None | str:
-        for i, rules in enumerate(self.constraints):
+        for rule in self.rules:
             s = Solver()
-            s.add(rules)
-            s.add(self._get_base_rules())
-            for var in [
-                self.src_ip_model,
-                self.dst_ip_model,
-                self.input_interface_model,
-                self.output_interface_model,
-                self.protocol_model,
-                self.src_port_model,
-                self.dst_port_model,
-                self.state_model,
-            ]:
-                if model[var] is not None:
-                    s.add(var == model[var])
-            if s.check() == sat:
-                rule = self.rules[i]
-                return rule
+            rule_constraints = rule.get_constraints(self)
+            if rule_constraints is not None:
+                s.add(rule_constraints)
+                s.add(self._get_base_constraints())
+                for var in [
+                    self.src_ip_model,
+                    self.dst_ip_model,
+                    self.input_interface_model,
+                    self.output_interface_model,
+                    self.protocol_model,
+                    self.src_port_model,
+                    self.dst_port_model,
+                    self.state_model,
+                ]:
+                    if model[var] is not None:
+                        s.add(var == model[var])
+                if s.check() == sat:
+                    return rule.iptables_rule
             s.reset()
 
     def translate_expression(self, expression: list[str]) -> Probe | BoolRef:
@@ -345,11 +359,11 @@ class SolveTables:
 
             match operand1.split("_"):
                 case ["state"]:
-                    top2 = self.STATE_ENUM.index(operand2)
+                    top2 = Rule.STATE_ENUM.index(operand2)
                 case ["protocol"]:
-                    top2 = self.PROTOCOL_ENUM.index(operand2)
+                    top2 = Rule.PROTOCOL_ENUM.index(operand2)
                 case [_, "iface"]:
-                    top2 = self._get_or_add_interface_index(operand2)
+                    top2 = Rule._get_or_add_interface_index(operand2)
                 case [_, "port"]:
                     top2 = int(operand2)
                 case [_, "ip"]:
