@@ -8,7 +8,10 @@ from z3 import *
 def create_iptables_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="iptables")
     parser.add_argument("-A", "--append")
-    parser.add_argument("-p", "--protocol", default="all")
+
+    protocol_group = parser.add_mutually_exclusive_group()
+    protocol_group.add_argument("-p", "--protocol", default="all")
+    protocol_group.add_argument("-np", "--not-protocol")
 
     source_group = parser.add_mutually_exclusive_group()
     source_group.add_argument("-s", "--source", default="0.0.0.0/0")
@@ -114,13 +117,17 @@ class Rule:
             return [constraint]
 
     def _create_protocol_constraints(
-        self, var: BitVecRef, protocol: str
+        self, var: BitVecRef, protocol: str, invert: bool = False
     ) -> list[BoolRef]:
         protocol_index = self.PROTOCOL_ENUM.index(protocol)
+        # TODO: inverting all interfaces does not really make sense, does it?
         if protocol_index == 0:
             return []
         else:
-            return [var == protocol_index]
+            constraint = var == protocol_index
+            if invert:
+                constraint = Not(constraint)
+            return [constraint]
 
     def _create_port_constraints(self, var: BitVecRef, port: str) -> list[BoolRef]:
         if ":" in port:
@@ -180,9 +187,14 @@ class Rule:
                 sub_constraints += self._create_interface_constraints(
                     st.output_interface_model, self.args.out_interface
                 )
-            sub_constraints += self._create_protocol_constraints(
-                st.protocol_model, self.args.protocol
-            )
+            if self.args.not_protocol:
+                sub_constraints += self._create_protocol_constraints(
+                    st.protocol_model, self.args.not_protocol, invert=True
+                )
+            else:
+                sub_constraints += self._create_protocol_constraints(
+                    st.protocol_model, self.args.protocol
+                )
             sub_constraints += self._create_port_constraints(
                 st.src_port_model, self.args.sport
             )
