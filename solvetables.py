@@ -295,8 +295,8 @@ class SolveTables:
         return translated_model
 
     def identify_rule(self, model: ModelRef) -> None | str:
+        s = Solver()
         for rule in self.rules:
-            s = Solver()
             rule_constraints = rule.get_constraints(self)
             if rule_constraints is not None:
                 s.add(rule_constraints)
