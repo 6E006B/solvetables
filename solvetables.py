@@ -36,8 +36,8 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     dport_group.add_argument("--dports", dest="dport")
 
     state_group = parser.add_mutually_exclusive_group()
-    parser.add_argument("--state")
-    parser.add_argument("--ctstate", dest="state")
+    state_group.add_argument("--state")
+    state_group.add_argument("--ctstate", dest="state")
 
     parser.add_argument("-m", "--match")
     parser.add_argument("--tcp-flags", nargs=2)
