@@ -449,7 +449,6 @@ def main():
 
     for rule_line in iptables_rules_file.splitlines():
         if rule_line.startswith("-A "):
-            print(rule_line)
             st.add_rule(rule_line)
 
     expression = (
