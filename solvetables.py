@@ -1,6 +1,7 @@
 import argparse
 import ipaddress
 import re
+import shlex
 from z3 import *
 
 
@@ -74,7 +75,7 @@ class Rule:
     def __init__(self, rule: str):
         self.iptables_rule = rule
         rule = self._fix_not_rule(rule)
-        self.args = self.IPTABLES_PARSER.parse_args(rule.split())
+        self.args = self.IPTABLES_PARSER.parse_args(shlex.split(rule))
         self.constraints = None
 
     def get_target(self):
