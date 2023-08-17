@@ -346,7 +346,7 @@ class SolveTables:
         }
         return translated_model
 
-    def identify_rule(self, chain: str, model: ModelRef) -> None | str:
+    def identify_rule(self, chain: str, model: ModelRef) -> None | list[str]:
         s = Solver()
         for rule in self.chain_rules[chain]:
             rule_constraints = rule.get_constraints(self)
@@ -367,10 +367,11 @@ class SolveTables:
                         s.add(var == model[var])
                 if s.check() == sat:
                     if rule.get_target() not in self.BASE_TARGETS:
-                        # TODO: combine whole path
-                        return self.identify_rule(chain=rule.get_target(), model=model)
+                        return [rule] + self.identify_rule(
+                            chain=rule.get_target(), model=model
+                        )
                     else:
-                        return rule.iptables_rule
+                        return [rule.iptables_rule]
             s.reset()
 
     def translate_expression(self, expression: list[str]) -> Probe | BoolRef:
@@ -484,10 +485,15 @@ def main():
         for k, v in translated_model.items():
             print(f"  {k}: {v}")
         print()
-        rule = st.identify_rule(chain=args.chain, model=model)
-        if rule:
-            print(f"The iptabeles rule hit is:")
-            print(rule)
+        rules = st.identify_rule(chain=args.chain, model=model)
+        if rules:
+            print(
+                "The iptabeles rule{} hit {}:".format(
+                    "s" if len(rules) > 1 else "", "are" if len(rules) > 1 else "is"
+                )
+            )
+            for rule in rules:
+                print(rule)
         else:
             print("Something went wrong! Unable to identify associated rule /o\\")
 
