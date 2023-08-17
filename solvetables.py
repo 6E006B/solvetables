@@ -356,34 +356,47 @@ class SolveTables:
     def identify_rule(self, chain: str, model: ModelRef) -> None | list[str]:
         s = Solver()
         for rule in self.chain_rules[chain]:
-            rule_constraints = rule.get_constraints(self)
-            if rule_constraints is not None:
-                s.add(rule_constraints)
-                s.add(self._get_base_constraints())
-                for var in [
-                    self.src_ip_model,
-                    self.dst_ip_model,
-                    self.input_interface_model,
-                    self.output_interface_model,
-                    self.protocol_model,
-                    self.src_port_model,
-                    self.dst_port_model,
-                    self.state_model,
-                ]:
-                    if model[var] is not None:
-                        s.add(var == model[var])
-                if s.check() == sat:
-                    if rule.get_target() not in self.BASE_TARGETS:
-                        additional_rules = self.identify_rule(
-                            chain=rule.get_target(), model=model
-                        )
-                        if additional_rules is None:
-                            continue
-                        else:
-                            return [rule.iptables_rule] + additional_rules
-                    else:
-                        return [rule.iptables_rule]
-            s.reset()
+            # We can skip these as our packet should be accepted
+            if rule.get_target() not in ["DROP", "REJECT"]:
+                rule_constraints = rule.get_constraints(self)
+                if rule_constraints is not None:
+                    s.add(rule_constraints)
+                    s.add(self._get_base_constraints())
+                    for var in [
+                        self.src_ip_model,
+                        self.dst_ip_model,
+                        self.input_interface_model,
+                        self.output_interface_model,
+                        self.protocol_model,
+                        self.src_port_model,
+                        self.dst_port_model,
+                        self.state_model,
+                    ]:
+                        if model[var] is not None:
+                            s.add(var == model[var])
+                    if s.check() == sat:
+                        match rule.get_target():
+                            case "ACCEPT":
+                                return [rule.iptables_rule]
+                            case "DROP" | "REJECT":
+                                print(
+                                    "You should never see this, please report your parameters."
+                                )
+                                continue
+                            case _:
+                                additional_rules = self.identify_rule(
+                                    chain=rule.get_target(), model=model
+                                )
+                                if additional_rules is None:
+                                    continue
+                                else:
+                                    return [rule.iptables_rule] + additional_rules
+                else:
+                    print(
+                        "This shouldn't happen! Rule constraints are None for:",
+                        rule.iptables_rule,
+                    )
+                s.reset()
 
     def translate_expression(self, expression: list[str]) -> Probe | BoolRef:
         var_table = {
