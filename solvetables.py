@@ -239,9 +239,12 @@ class Rule:
 
 
 class SolveTables:
+    BASE_TARGETS = ["ACCEPT", "DROP", "REJECT"]
+
     def __init__(self, default_policy: str) -> None:
         self.accept_default = default_policy == "ACCEPT"
         self.chain_rules: dict[str, list[Rule]] = defaultdict(list)
+        self.chain_constraints: dict[str, BoolRef] = {}
         self.src_ip_model: BitVecRef = BitVec("src_ip_model", 32)
         self.dst_ip_model: BitVecRef = BitVec("dst_ip_model", 32)
         self.input_interface_model: BitVecRef = BitVec("input_interface_model", 8)
@@ -265,8 +268,7 @@ class SolveTables:
         )
         return base_rules
 
-    def build_constraints(self, chain: str) -> Probe | BoolRef:
-        # print("self.constraints:", self.constraints)
+    def build_chain_constraints(self, chain: str) -> BoolRef:
         previous_rules = []
         rules = []
         for rule in self.chain_rules[chain]:
@@ -278,13 +280,26 @@ class SolveTables:
                 else:
                     rules.append(constraints)
             if constraints is not None:
-                previous_rules.append(constraints)
+                target_constraints = True
+                if target not in self.BASE_TARGETS:
+                    target_constraints = self.get_chain_constraints(chain=chain)
+                previous_rules.append(And(constraints, target_constraints))
         if self.accept_default:
             rules.append(True)
+        return Or(rules)
+
+    def get_chain_constraints(self, chain: str) -> BoolRef:
+        if chain not in self.chain_constraints:
+            self.chain_constraints[chain] = self.build_chain_constraints(chain=chain)
+        return self.chain_constraints[chain]
+
+    def build_constraints(self, chain: str) -> Probe | BoolRef:
+        # print("self.constraints:", self.constraints)
+        chain_constraints = self.get_chain_constraints(chain=chain)
         base_rules = self._get_base_constraints()
 
         # return And(Or(rules), base_rules)
-        return simplify(And(Or(rules), base_rules))
+        return simplify(And(chain_constraints, base_rules))
 
     def check_and_get_model(
         self, chain: str, constraints: (Probe | BoolRef)
@@ -351,7 +366,11 @@ class SolveTables:
                     if model[var] is not None:
                         s.add(var == model[var])
                 if s.check() == sat:
-                    return rule.iptables_rule
+                    if rule.get_target() not in self.BASE_TARGETS:
+                        # TODO: combine whole path
+                        return self.identify_rule(chain=rule.get_target(), model=model)
+                    else:
+                        return rule.iptables_rule
             s.reset()
 
     def translate_expression(self, expression: list[str]) -> Probe | BoolRef:
