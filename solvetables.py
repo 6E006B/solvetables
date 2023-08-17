@@ -227,7 +227,7 @@ class Rule:
             )
 
         constraints = And(sub_constraints)
-        constraints = simplify(constraints)
+        # constraints = simplify(constraints)
         # print("adding constraints:", constraints)
         self.constraints = constraints
 
@@ -278,11 +278,10 @@ class SolveTables:
             target = rule.get_target()
             constraints = rule.get_constraints(self)
             # print("constraints", constraints)
-            if target == "ACCEPT":
-                if previous_rules:
-                    rules.append(And(Not(Or(previous_rules)), constraints))
-                else:
-                    rules.append(constraints)
+            if previous_rules:
+                rules.append(And(Not(Or(previous_rules)), constraints))
+            else:
+                rules.append(constraints)
             if constraints is not None:
                 target_constraints = self.get_chain_constraints(chain=target)
                 # FIXME: If there is no ACCEPT rule within the whole chain, this does not make sense. How to fix?
@@ -304,8 +303,9 @@ class SolveTables:
         chain_constraints = self.get_chain_constraints(chain=chain)
         base_rules = self._get_base_constraints()
 
-        # return And(Or(rules), base_rules)
-        return simplify(And(chain_constraints, base_rules))
+        combined_constraints = And(chain_constraints, base_rules)
+        # return combined_constraints
+        return simplify(combined_constraints)
 
     def check_and_get_model(
         self, chain: str, constraints: (Probe | BoolRef)
@@ -313,7 +313,8 @@ class SolveTables:
         m = None
         s = Solver()
         rules = self.build_constraints(chain)
-        # print("rules:", rules)
+        # print("final constraints:")
+        # print(And(constraints, rules))
         s.add(constraints, rules)
         result = s.check()
         if result == sat:
