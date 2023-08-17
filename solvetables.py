@@ -173,64 +173,63 @@ class Rule:
 
     def _build_constraints(self, st: "SolveTables"):
         sub_constraints = []
-        if self.args.jump in ["ACCEPT", "REJECT", "DROP"]:
-            if self.args.not_source:
-                sub_constraints += self._create_ip_constraints(
-                    st.src_ip_model, self.args.not_source, invert=True
-                )
-            else:
-                sub_constraints += self._create_ip_constraints(
-                    st.src_ip_model, self.args.source
-                )
-            if self.args.not_source:
-                sub_constraints += self._create_ip_constraints(
-                    st.dst_ip_model, self.args.not_destination, invert=True
-                )
-            else:
-                sub_constraints += self._create_ip_constraints(
-                    st.dst_ip_model, self.args.destination
-                )
-            if self.args.not_in_interface:
-                sub_constraints += self._create_interface_constraints(
-                    st.input_interface_model, self.args.not_in_interface, invert=True
-                )
-            else:
-                sub_constraints += self._create_interface_constraints(
-                    st.input_interface_model, self.args.in_interface
-                )
-            if self.args.not_out_interface:
-                sub_constraints += self._create_interface_constraints(
-                    st.output_interface_model,
-                    self.args.not_out_interface,
-                    invert=True,
-                )
-            else:
-                sub_constraints += self._create_interface_constraints(
-                    st.output_interface_model, self.args.out_interface
-                )
-            if self.args.not_protocol:
-                sub_constraints += self._create_protocol_constraints(
-                    st.protocol_model, self.args.not_protocol, invert=True
-                )
-            else:
-                sub_constraints += self._create_protocol_constraints(
-                    st.protocol_model, self.args.protocol
-                )
-            sub_constraints += self._create_port_constraints(
-                st.src_port_model, self.args.sport
+        if self.args.not_source:
+            sub_constraints += self._create_ip_constraints(
+                st.src_ip_model, self.args.not_source, invert=True
             )
-            sub_constraints += self._create_port_constraints(
-                st.dst_port_model, self.args.dport
+        else:
+            sub_constraints += self._create_ip_constraints(
+                st.src_ip_model, self.args.source
             )
-            if self.args.state is not None:
-                sub_constraints += self._create_state_constraints(
-                    st.state_model, self.args.state
-                )
+        if self.args.not_source:
+            sub_constraints += self._create_ip_constraints(
+                st.dst_ip_model, self.args.not_destination, invert=True
+            )
+        else:
+            sub_constraints += self._create_ip_constraints(
+                st.dst_ip_model, self.args.destination
+            )
+        if self.args.not_in_interface:
+            sub_constraints += self._create_interface_constraints(
+                st.input_interface_model, self.args.not_in_interface, invert=True
+            )
+        else:
+            sub_constraints += self._create_interface_constraints(
+                st.input_interface_model, self.args.in_interface
+            )
+        if self.args.not_out_interface:
+            sub_constraints += self._create_interface_constraints(
+                st.output_interface_model,
+                self.args.not_out_interface,
+                invert=True,
+            )
+        else:
+            sub_constraints += self._create_interface_constraints(
+                st.output_interface_model, self.args.out_interface
+            )
+        if self.args.not_protocol:
+            sub_constraints += self._create_protocol_constraints(
+                st.protocol_model, self.args.not_protocol, invert=True
+            )
+        else:
+            sub_constraints += self._create_protocol_constraints(
+                st.protocol_model, self.args.protocol
+            )
+        sub_constraints += self._create_port_constraints(
+            st.src_port_model, self.args.sport
+        )
+        sub_constraints += self._create_port_constraints(
+            st.dst_port_model, self.args.dport
+        )
+        if self.args.state is not None:
+            sub_constraints += self._create_state_constraints(
+                st.state_model, self.args.state
+            )
 
-            constraints = And(sub_constraints)
-            constraints = simplify(constraints)
-            # print("adding constraints:", constraints)
-            self.constraints = constraints
+        constraints = And(sub_constraints)
+        constraints = simplify(constraints)
+        # print("adding constraints:", constraints)
+        self.constraints = constraints
 
     def get_constraints(self, st: "SolveTables") -> BoolRef:
         if self.constraints is None:
@@ -244,7 +243,11 @@ class SolveTables:
     def __init__(self, default_policy: str) -> None:
         self.accept_default = default_policy == "ACCEPT"
         self.chain_rules: dict[str, list[Rule]] = defaultdict(list)
-        self.chain_constraints: dict[str, BoolRef] = {}
+        self.chain_constraints: dict[str, BoolRef] = {
+            "ACCEPT": True,
+            "DROP": False,
+            "REJECT": False,
+        }
         self.src_ip_model: BitVecRef = BitVec("src_ip_model", 32)
         self.dst_ip_model: BitVecRef = BitVec("dst_ip_model", 32)
         self.input_interface_model: BitVecRef = BitVec("input_interface_model", 8)
@@ -274,15 +277,18 @@ class SolveTables:
         for rule in self.chain_rules[chain]:
             target = rule.get_target()
             constraints = rule.get_constraints(self)
+            # print("constraints", constraints)
             if target == "ACCEPT":
                 if previous_rules:
                     rules.append(And(Not(Or(previous_rules)), constraints))
                 else:
                     rules.append(constraints)
             if constraints is not None:
-                target_constraints = True
-                if target not in self.BASE_TARGETS:
-                    target_constraints = self.get_chain_constraints(chain=chain)
+                target_constraints = self.get_chain_constraints(chain=target)
+                # FIXME: If there is no ACCEPT rule within the whole chain, this does not make sense. How to fix?
+                # if target not in self.BASE_TARGETS:
+                #     print(f"Additional constraints for '{target}' are:")
+                #     print(target_constraints)
                 previous_rules.append(And(constraints, target_constraints))
         if self.accept_default:
             rules.append(True)
@@ -367,9 +373,13 @@ class SolveTables:
                         s.add(var == model[var])
                 if s.check() == sat:
                     if rule.get_target() not in self.BASE_TARGETS:
-                        return [rule] + self.identify_rule(
+                        additional_rules = self.identify_rule(
                             chain=rule.get_target(), model=model
                         )
+                        if additional_rules is None:
+                            continue
+                        else:
+                            return [rule.iptables_rule] + additional_rules
                     else:
                         return [rule.iptables_rule]
             s.reset()
