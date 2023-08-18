@@ -278,17 +278,26 @@ class SolveTables:
             target = rule.get_target()
             constraints = rule.get_constraints(self)
             # print("constraints", constraints)
-            if previous_rules:
-                rules.append(And(Not(Or(previous_rules)), constraints))
-            else:
-                rules.append(constraints)
             if constraints is not None:
                 target_constraints = self.get_chain_constraints(chain=target)
                 # FIXME: If there is no ACCEPT rule within the whole chain, this does not make sense. How to fix?
                 # if target not in self.BASE_TARGETS:
                 #     print(f"Additional constraints for '{target}' are:")
                 #     print(target_constraints)
-                previous_rules.append(And(constraints, target_constraints))
+
+                # Include constraints from target chain
+                if target_constraints is not None:
+                    constraints = And(constraints, target_constraints)
+
+                # Only add previously rules if they are not empty
+                if previous_rules:
+                    rules.append(And(Not(Or(previous_rules)), constraints))
+                else:
+                    rules.append(constraints)
+
+                # Keep a list of previous constraints
+                # These will be negated and preprended to the next rule
+                previous_rules.append(constraints)
         if self.accept_default:
             rules.append(True)
         return Or(rules)
