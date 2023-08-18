@@ -72,6 +72,5 @@ The iptabeles rule hit is:
 ## Limitations
 
 - Only a subset of iptables parameters are implemented (yet).
-- Currently only rules are parsed for the target chain and if the target (`-j`) is either INPUT, FORWARD or OUTPUT.
 - The query expression language is quite limited and does not allow more complex structures.
 - Likely many, many more
