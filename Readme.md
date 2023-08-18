@@ -73,4 +73,4 @@ The iptabeles rule hit is:
 
 - Only a subset of iptables parameters are implemented (yet).
 - The query expression language is quite limited and does not allow more complex structures.
-- Likely many, many more
+- Likely many, many more (also check [TODO.md](TODO.md))
