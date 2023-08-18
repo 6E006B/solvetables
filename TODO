@@ -1,6 +1,4 @@
-- Create var with group of rules for each chain and include them all where referenced to handle all -j targets
-
-- Include ip r / ip a information to augment information about the interfaces and networks. This way also indirect paths can be discovered via combinations of INPUT, FORWARD, OUTPUT chains via routing of the host.
+- Include ip r / ip a information to augment information about the interfaces and networks. This way also indirect paths can be discovered via combinations of INPUT, FORWARD, OUTPUT chains via routing of the host. These probably need to be context sensitive, depending on the considered chain.
 
 - Use tokenizer or something alike to improve expressin parsing for improved expressiveness; to enable something like "(src_port == 123 and dst_port == 8080) or (src_port == 432 and dst_port == 80)".
 
@@ -10,3 +8,5 @@
   - don't use the first and last IPs of a network, like 192.168.0.0
 
 - Exclude output interface from INPUT rules and check for other chain specific setups.
+
+- Add "in" keyword for expressions that may have , separated lists, : ranges or /CIDR for IP ranges.
