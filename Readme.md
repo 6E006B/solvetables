@@ -41,7 +41,7 @@ The set of iptables rules:
 
 To obtain a packet that reaches `TCP/80` the expression `dst_port == 80 and protocol == tcp` can be used.
 ```
-python solvetabples.py INPUT example-iptables-save.conf "dst_port == 80 and protocol == tcp"
+python solvetables.py INPUT example-iptables-save.conf "dst_port == 80 and protocol == tcp"
 ```
 Produces the output:
 ```
