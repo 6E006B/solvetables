@@ -283,3 +283,26 @@ class TestInputChain(BaseTest):
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[2]
+
+    def test_in_expression(self, st: SolveTables):
+        additional_constraints = st.translate_expression(
+            "src_ip in 192.168.14.32/30".split()
+        )
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+        model_dict = st.translate_model(model)
+        assert model_dict["input_interface"] == "eth0"
+        assert model_dict["dst_port"] in range(20, 21)
+        assert model_dict["src_port"] in range(1024, 65535)
+        src_ip_net = ipaddress.IPv4Network("192.168.14.0/24")
+        assert model_dict["src_ip"] in src_ip_net
+        dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
+        assert model_dict["dst_ip"] in dst_ip_net
+
+        rules = st.identify_rule(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0] == self.IPTABLES_RULES[2]
