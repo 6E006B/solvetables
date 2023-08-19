@@ -258,6 +258,29 @@ class SolveTables:
         self.state_model: BitVecRef = BitVec("state_model", 4)
         self.iptables_parser: argparse.ArgumentParser = create_iptables_argparse()
 
+        self.var_table = {
+            "src_ip": self.src_ip_model,
+            "dst_ip": self.dst_ip_model,
+            "in_iface": self.input_interface_model,
+            "out_iface": self.output_interface_model,
+            "protocol": self.protocol_model,
+            "src_port": self.src_port_model,
+            "dst_port": self.dst_port_model,
+            "state": self.state_model,
+        }
+        self.op_table = {
+            "==": BitVecRef.__eq__,
+            "!=": BitVecRef.__ne__,
+            "<=": ULE,
+            ">=": UGE,
+            "<": ULT,
+            ">": UGT,
+        }
+        self.concat_op_table = {
+            "and": And,
+            "or": Or,
+        }
+
     def add_rule(self, rule: str):
         new_rule = Rule(rule)
         self.chain_rules[new_rule.get_chain()].append(new_rule)
@@ -407,45 +430,40 @@ class SolveTables:
                     )
                 s.reset()
 
-    def translate_expression(self, expression: list[str]) -> Probe | BoolRef:
-        var_table = {
-            "src_ip": self.src_ip_model,
-            "dst_ip": self.dst_ip_model,
-            "in_iface": self.input_interface_model,
-            "out_iface": self.output_interface_model,
-            "protocol": self.protocol_model,
-            "src_port": self.src_port_model,
-            "dst_port": self.dst_port_model,
-            "state": self.state_model,
-        }
-        op_table = {
-            "==": BitVecRef.__eq__,
-            "!=": BitVecRef.__ne__,
-            "<=": ULE,
-            ">=": UGE,
-            "<": ULT,
-            ">": UGT,
-        }
-        concat_op_table = {
-            "and": And,
-            "or": Or,
-        }
+    def _translate_in_expression(self, operand1: str, operand2: str) -> BoolRef:
+        if "," in operand2:
+            values = operand2.split(",")
+            sub_constraints = []
+            for value in values:
+                sub_constraints.append(
+                    self._translate_expression_triple("==", operand1, value)
+                )
+            return Or(sub_constraints)
+        elif ":" in operand2:
+            min_val, max_val = operand2.split(":")
+            sub_constraints = [
+                self._translate_expression_triple(">=", operand1, min_val),
+                self._translate_expression_triple("<=", operand1, max_val),
+            ]
+            return And(sub_constraints)
+        elif "/" in operand2:
+            assert operand1.endswith("_ip")
+            ip_net = ipaddress.IPv4Network(operand2)
+            sub_constraints = [
+                self._translate_expression_triple(">=", operand1, ip_net[0]),
+                self._translate_expression_triple("<=", operand1, ip_net[-1]),
+            ]
+            return And(sub_constraints)
 
-        constraints = None
-        concat_op = None
-
-        while len(expression) > 0:
-            assert len(expression) >= 3
-
-            operand1 = expression.pop(0)
-            operator = expression.pop(0)
-            operand2 = expression.pop(0)
-
+    def _translate_expression_triple(self, operator, operand1, operand2):
+        if operator == "in":
+            sub_constraint = self._translate_in_expression(operand1, operand2)
+        else:
             # assert operand1 in var_table.keys()
-            top1 = var_table[operand1]
+            top1 = self.var_table[operand1]
 
             # assert operator in op_table.keys()
-            op = op_table[operator]
+            op = self.op_table[operator]
 
             match operand1.split("_"):
                 case ["state"]:
@@ -458,8 +476,23 @@ class SolveTables:
                     top2 = int(operand2)
                 case [_, "ip"]:
                     top2 = int(ipaddress.IPv4Address(operand2))
-
             sub_constraint = op(top1, top2)
+        return sub_constraint
+
+    def translate_expression(self, expression: list[str]) -> Probe | BoolRef:
+        constraints = None
+        concat_op = None
+
+        while len(expression) > 0:
+            assert len(expression) >= 3
+
+            operand1 = expression.pop(0)
+            operator = expression.pop(0)
+            operand2 = expression.pop(0)
+
+            sub_constraint = self._translate_expression_triple(
+                operator, operand1, operand2
+            )
             if constraints is None:
                 constraints = sub_constraint
             else:
@@ -468,7 +501,7 @@ class SolveTables:
             if len(expression) > 0:
                 concat_operator = expression.pop(0)
                 # assert concat_operator in concat_op_table.keys()
-                concat_op = concat_op_table[concat_operator]
+                concat_op = self.concat_op_table[concat_operator]
         return constraints
 
 
