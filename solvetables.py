@@ -308,9 +308,14 @@ class SolveTables:
                 #     print(f"Additional constraints for '{target}' are:")
                 #     print(target_constraints)
 
+                keep_constraints = constraints
                 # Include constraints from target chain
                 if target_constraints is not None:
                     constraints = And(constraints, target_constraints)
+                    # only store combined constraints if target constraints is not False
+                    # i.e. DROP or REJECT
+                    if target_constraints is not False:
+                        keep_constraints = constraints
 
                 # Only add previously rules if they are not empty
                 if previous_rules:
@@ -320,7 +325,7 @@ class SolveTables:
 
                 # Keep a list of previous constraints
                 # These will be negated and preprended to the next rule
-                previous_rules.append(constraints)
+                previous_rules.append(keep_constraints)
         if self.accept_default:
             rules.append(True)
         return Or(rules)
