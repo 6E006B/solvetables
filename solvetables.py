@@ -327,7 +327,11 @@ class SolveTables:
                 # These will be negated and preprended to the next rule
                 previous_rules.append(keep_constraints)
         if self.accept_default:
-            rules.append(True)
+            # Only add previously rules if they are not empty
+            if previous_rules:
+                rules.append(And(Not(Or(previous_rules)), True))
+            else:
+                rules.append(True)
         return Or(rules)
 
     def get_chain_constraints(self, chain: str) -> BoolRef:
