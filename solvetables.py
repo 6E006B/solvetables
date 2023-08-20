@@ -303,7 +303,6 @@ class SolveTables:
             # print("constraints", constraints)
             if constraints is not None:
                 target_constraints = self.get_chain_constraints(chain=target)
-                # FIXME: If there is no ACCEPT rule within the whole chain, this does not make sense. How to fix?
                 # if target not in self.BASE_TARGETS:
                 #     print(f"Additional constraints for '{target}' are:")
                 #     print(target_constraints)
