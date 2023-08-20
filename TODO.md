@@ -8,5 +8,3 @@
   - don't use the first and last IPs of a network, like 192.168.0.0
 
 - Exclude output interface from INPUT rules and check for other chain specific setups.
-
-- Add "in" keyword for expressions that may have , separated lists, : ranges or /CIDR for IP ranges.
