@@ -33,11 +33,11 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     of_group.add_argument("-no", "--not-out-interface")
 
     sport_group = parser.add_mutually_exclusive_group()
-    sport_group.add_argument("--sport", default="0:655335")
+    sport_group.add_argument("--sport", default="0:65535")
     sport_group.add_argument("--sports", dest="sport")
 
     dport_group = parser.add_mutually_exclusive_group()
-    dport_group.add_argument("--dport", default="0:655335")
+    dport_group.add_argument("--dport", default="0:65535")
     dport_group.add_argument("--dports", dest="dport")
 
     state_group = parser.add_mutually_exclusive_group()
