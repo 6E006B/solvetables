@@ -284,7 +284,7 @@ class TestInputChain(BaseTest):
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[2]
 
-    def test_in_expression(self, st: SolveTables):
+    def test_in_expression_cidr(self, st: SolveTables):
         additional_constraints = st.translate_expression(
             "src_ip in 192.168.14.32/30".split()
         )
@@ -297,6 +297,52 @@ class TestInputChain(BaseTest):
         assert model_dict["input_interface"] == "eth0"
         assert model_dict["dst_port"] in range(20, 22)
         assert model_dict["src_port"] in range(1024, 65536)
+        src_ip_net = ipaddress.IPv4Network("192.168.14.0/24")
+        assert model_dict["src_ip"] in src_ip_net
+        dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
+        assert model_dict["dst_ip"] in dst_ip_net
+
+        rules = st.identify_rule(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0] == self.IPTABLES_RULES[2]
+
+    def test_in_expression_list(self, st: SolveTables):
+        additional_constraints = st.translate_expression(
+            "src_ip in 192.168.14.32/30 and dst_port >= 21 and src_port in 6000,7000,8000".split()
+        )
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+        model_dict = st.translate_model(model)
+        assert model_dict["input_interface"] == "eth0"
+        assert model_dict["dst_port"] == 21
+        assert model_dict["src_port"] in [6000, 7000, 8000]
+        src_ip_net = ipaddress.IPv4Network("192.168.14.0/24")
+        assert model_dict["src_ip"] in src_ip_net
+        dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
+        assert model_dict["dst_ip"] in dst_ip_net
+
+        rules = st.identify_rule(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0] == self.IPTABLES_RULES[2]
+
+    def test_in_expression_range(self, st: SolveTables):
+        additional_constraints = st.translate_expression(
+            "in_iface == eth0 and dst_port in 1:100 and src_port in 1000:2000".split()
+        )
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+        model_dict = st.translate_model(model)
+        assert model_dict["input_interface"] == "eth0"
+        assert model_dict["dst_port"] in range(20, 22)
+        assert model_dict["src_port"] in range(1024, 2001)
         src_ip_net = ipaddress.IPv4Network("192.168.14.0/24")
         assert model_dict["src_ip"] in src_ip_net
         dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
