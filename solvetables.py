@@ -258,29 +258,6 @@ class SolveTables:
         self.state_model: BitVecRef = BitVec("state_model", 4)
         self.iptables_parser: argparse.ArgumentParser = create_iptables_argparse()
 
-        self.var_table = {
-            "src_ip": self.src_ip_model,
-            "dst_ip": self.dst_ip_model,
-            "in_iface": self.input_interface_model,
-            "out_iface": self.output_interface_model,
-            "protocol": self.protocol_model,
-            "src_port": self.src_port_model,
-            "dst_port": self.dst_port_model,
-            "state": self.state_model,
-        }
-        self.op_table = {
-            "==": BitVecRef.__eq__,
-            "!=": BitVecRef.__ne__,
-            "<=": ULE,
-            ">=": UGE,
-            "<": ULT,
-            ">": UGT,
-        }
-        self.concat_op_table = {
-            "and": And,
-            "or": Or,
-        }
-
     def add_rule(self, rule: str):
         new_rule = Rule(rule)
         self.chain_rules[new_rule.get_chain()].append(new_rule)
@@ -438,6 +415,38 @@ class SolveTables:
                     )
                 s.reset()
 
+
+class SolveTablesExpression:
+    def __init__(self, expression: str, st: SolveTables):
+        self.var_table = {
+            "src_ip": st.src_ip_model,
+            "dst_ip": st.dst_ip_model,
+            "in_iface": st.input_interface_model,
+            "out_iface": st.output_interface_model,
+            "protocol": st.protocol_model,
+            "src_port": st.src_port_model,
+            "dst_port": st.dst_port_model,
+            "state": st.state_model,
+        }
+        self.op_table = {
+            "==": BitVecRef.__eq__,
+            "!=": BitVecRef.__ne__,
+            "<=": ULE,
+            ">=": UGE,
+            "<": ULT,
+            ">": UGT,
+        }
+        self.concat_op_table = {
+            "and": And,
+            "or": Or,
+        }
+
+        expression = expression[0].split() if len(expression) == 1 else expression
+        self.constraints = self._translate_expression(expression=expression)
+
+    def get_constraints(self) -> BoolRef:
+        return self.constraints
+
     def _translate_in_expression(self, operand1: str, operand2: str) -> BoolRef:
         if "," in operand2:
             values = operand2.split(",")
@@ -487,7 +496,7 @@ class SolveTables:
             sub_constraint = op(top1, top2)
         return sub_constraint
 
-    def translate_expression(self, expression: list[str]) -> Probe | BoolRef:
+    def _translate_expression(self, expression: list[str]) -> Probe | BoolRef:
         constraints = None
         concat_op = None
 
@@ -545,10 +554,8 @@ def main():
         if rule_line.startswith("-A "):
             st.add_rule(rule_line)
 
-    expression = (
-        args.expression[0].split() if len(args.expression) == 1 else args.expression
-    )
-    additional_constraints = st.translate_expression(expression)
+    expression = SolveTablesExpression(args.expression, st)
+    additional_constraints = expression.get_constraints()
     model = st.check_and_get_model(chain=args.chain, constraints=additional_constraints)
     if model is not None:
         print("The identified model is:")
