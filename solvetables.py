@@ -370,50 +370,55 @@ class SolveTables:
         }
         return translated_model
 
-    def identify_rule(self, chain: str, model: ModelRef) -> None | list[str]:
+    def identify_rule_from_model(self, chain: str, model: ModelRef) -> None | list[str]:
+        model_constraints_list = []
+        for var in [
+            self.src_ip_model,
+            self.dst_ip_model,
+            self.input_interface_model,
+            self.output_interface_model,
+            self.protocol_model,
+            self.src_port_model,
+            self.dst_port_model,
+            self.state_model,
+        ]:
+            if model[var] is not None:
+                model_constraints_list.append(var == model[var])
+        model_constraints = And(model_constraints_list)
+        return self.identify_rule(chain=chain, constraints=model_constraints)
+
+    def identify_rule(self, chain: str, constraints: BoolRef) -> None | list[str]:
         s = Solver()
         for rule in self.chain_rules[chain]:
-            # We can skip these as our packet should be accepted
-            if rule.get_target() not in ["DROP", "REJECT"]:
-                rule_constraints = rule.get_constraints(self)
-                if rule_constraints is not None:
-                    s.add(rule_constraints)
-                    s.add(self._get_base_constraints())
-                    for var in [
-                        self.src_ip_model,
-                        self.dst_ip_model,
-                        self.input_interface_model,
-                        self.output_interface_model,
-                        self.protocol_model,
-                        self.src_port_model,
-                        self.dst_port_model,
-                        self.state_model,
-                    ]:
-                        if model[var] is not None:
-                            s.add(var == model[var])
-                    if s.check() == sat:
-                        match rule.get_target():
-                            case "ACCEPT":
-                                return [rule.iptables_rule]
-                            case "DROP" | "REJECT":
-                                print(
-                                    "You should never see this, please report your parameters."
-                                )
+            rule_constraints = rule.get_constraints(self)
+            if rule_constraints is not None:
+                all_constraints = simplify(
+                    And(rule_constraints, self._get_base_constraints(), constraints)
+                )
+                s.add(all_constraints)
+                if s.check() == sat:
+                    match rule.get_target():
+                        case "ACCEPT":
+                            return [rule.iptables_rule]
+                        case "DROP" | "REJECT":
+                            print(
+                                "You should never see this, please report your parameters."
+                            )
+                            continue
+                        case _:
+                            additional_rules = self.identify_rule(
+                                chain=rule.get_target(), constraints=constraints
+                            )
+                            if additional_rules is None:
                                 continue
-                            case _:
-                                additional_rules = self.identify_rule(
-                                    chain=rule.get_target(), model=model
-                                )
-                                if additional_rules is None:
-                                    continue
-                                else:
-                                    return [rule.iptables_rule] + additional_rules
-                else:
-                    print(
-                        "This shouldn't happen! Rule constraints are None for:",
-                        rule.iptables_rule,
-                    )
-                s.reset()
+                            else:
+                                return [rule.iptables_rule] + additional_rules
+            else:
+                print(
+                    "This shouldn't happen! Rule constraints are None for:",
+                    rule.iptables_rule,
+                )
+            s.reset()
 
 
 class SolveTablesExpression:
@@ -566,7 +571,7 @@ def main():
         for k, v in translated_model.items():
             print(f"  {k}: {v}")
         print()
-        rules = st.identify_rule(chain=args.chain, model=model)
+        rules = st.identify_rule_from_model(chain=args.chain, model=model)
         if rules:
             print(
                 "The iptabeles rule{} hit {}:".format(
