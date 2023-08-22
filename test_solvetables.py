@@ -78,7 +78,7 @@ class TestDefaultDrop(BaseTest):
         rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[0]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
 
     def test_input_default_out(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -96,7 +96,7 @@ class TestDefaultDrop(BaseTest):
         rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[0]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
 
     def test_input_default_in(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -128,8 +128,8 @@ class TestIndirection(BaseTest):
         rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 2
-        assert rules[0] == self.IPTABLES_RULES[0]
-        assert rules[1] == self.IPTABLES_RULES[1]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+        assert rules[1].iptables_rule == self.IPTABLES_RULES[1]
 
     def test_indirection_first(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -147,8 +147,8 @@ class TestIndirection(BaseTest):
         rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 2
-        assert rules[0] == self.IPTABLES_RULES[0]
-        assert rules[1] == self.IPTABLES_RULES[1]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+        assert rules[1].iptables_rule == self.IPTABLES_RULES[1]
 
     def test_indirection_last(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -166,8 +166,8 @@ class TestIndirection(BaseTest):
         rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 2
-        assert rules[0] == self.IPTABLES_RULES[0]
-        assert rules[1] == self.IPTABLES_RULES[1]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+        assert rules[1].iptables_rule == self.IPTABLES_RULES[1]
 
     def test_indirection_inverse(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -226,7 +226,7 @@ class TestExplicitDrop(BaseTest):
         rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[1]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[1]
 
     def test_explicit_drop_hit_accept(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -244,7 +244,7 @@ class TestExplicitDrop(BaseTest):
         rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[1]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[1]
 
     def test_explicit_drop_hit_default(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -285,7 +285,7 @@ class TestInputChain(BaseTest):
         rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[1]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[1]
 
     def test_hit_not_ip(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -308,7 +308,7 @@ class TestInputChain(BaseTest):
         rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[2]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
 
     def test_in_expression_cidr(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -331,7 +331,7 @@ class TestInputChain(BaseTest):
         rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[2]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
 
     def test_in_expression_list(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -355,7 +355,7 @@ class TestInputChain(BaseTest):
         rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[2]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
 
     def test_in_expression_range(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
@@ -378,4 +378,5 @@ class TestInputChain(BaseTest):
         rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
-        assert rules[0] == self.IPTABLES_RULES[2]
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
+
