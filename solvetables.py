@@ -455,34 +455,52 @@ class SolveTablesExpression:
     def get_constraints(self) -> None | BoolRef:
         return self.constraints
 
-    def _translate_in_expression(self, operand1: str, operand2: str) -> BoolRef:
+    def _translate_in_expression(
+        self, operand1: str, operand2: str, negate: bool = False
+    ) -> BoolRef:
         if "," in operand2:
             values = operand2.split(",")
             sub_constraints = []
+            operator = "!=" if negate else "=="
+            conjunction = And if negate else Or
             for value in values:
                 sub_constraints.append(
-                    self._translate_expression_triple("==", operand1, value)
+                    self._translate_expression_triple(operator, operand1, value)
                 )
-            return Or(sub_constraints)
+            return conjunction(sub_constraints)
         elif ":" in operand2:
             min_val, max_val = operand2.split(":")
-            sub_constraints = [
-                self._translate_expression_triple(">=", operand1, min_val),
-                self._translate_expression_triple("<=", operand1, max_val),
-            ]
-            return And(sub_constraints)
+            if negate:
+                sub_constraints = Or(
+                    self._translate_expression_triple("<", operand1, min_val),
+                    self._translate_expression_triple(">", operand1, max_val),
+                )
+            else:
+                sub_constraints = And(
+                    self._translate_expression_triple(">=", operand1, min_val),
+                    self._translate_expression_triple("<=", operand1, max_val),
+                )
+            return sub_constraints
         elif "/" in operand2:
             assert operand1.endswith("_ip")
             ip_net = ipaddress.IPv4Network(operand2)
-            sub_constraints = [
-                self._translate_expression_triple(">=", operand1, ip_net[0]),
-                self._translate_expression_triple("<=", operand1, ip_net[-1]),
-            ]
-            return And(sub_constraints)
+            if negate:
+                sub_constraints = Or(
+                    self._translate_expression_triple("<", operand1, ip_net[0]),
+                    self._translate_expression_triple(">", operand1, ip_net[-1]),
+                )
+            else:
+                sub_constraints = And(
+                    self._translate_expression_triple(">=", operand1, ip_net[0]),
+                    self._translate_expression_triple("<=", operand1, ip_net[-1]),
+                )
+            return sub_constraints
 
     def _translate_expression_triple(self, operator, operand1, operand2):
-        if operator == "in":
-            sub_constraint = self._translate_in_expression(operand1, operand2)
+        if operator in ["in", "!in"]:
+            sub_constraint = self._translate_in_expression(
+                operand1, operand2, negate=operator == "!in"
+            )
         else:
             # assert operand1 in var_table.keys()
             top1 = self.var_table[operand1]
