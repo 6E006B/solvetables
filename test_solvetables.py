@@ -333,7 +333,55 @@ class TestInputChain(BaseTest):
         assert len(rules) == 1
         assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
 
-    def test_in_expression_list(self, st: SolveTables):
+    def test_in_expression_range_ip(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip in 192.168.14.32:192.168.14.40", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+        model_dict = st.translate_model(model)
+        assert model_dict["input_interface"] == "eth0"
+        assert model_dict["dst_port"] in range(20, 22)
+        assert model_dict["src_port"] in range(1024, 65536)
+        assert model_dict["src_ip"] >= ipaddress.IPv4Address("192.168.14.32")
+        assert model_dict["src_ip"] <= ipaddress.IPv4Address("192.168.14.40")
+        dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
+        assert model_dict["dst_ip"] in dst_ip_net
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
+
+    def test_in_expression_list_ip(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip in 192.168.14.32,192.168.14.40", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+        model_dict = st.translate_model(model)
+        assert model_dict["input_interface"] == "eth0"
+        assert model_dict["dst_port"] in range(20, 22)
+        assert model_dict["src_port"] in range(1024, 65536)
+        assert model_dict["src_ip"] in [
+            ipaddress.IPv4Address("192.168.14.32"),
+            ipaddress.IPv4Address("192.168.14.40"),
+        ]
+        dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
+        assert model_dict["dst_ip"] in dst_ip_net
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
+
+    def test_in_expression_list_port(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
             "src_ip in 192.168.14.32/30 and dst_port >= 21 and src_port in 6000,7000,8000",
             st,
@@ -357,7 +405,7 @@ class TestInputChain(BaseTest):
         assert len(rules) == 1
         assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
 
-    def test_in_expression_range(self, st: SolveTables):
+    def test_in_expression_range_port(self, st: SolveTables):
         additional_constraints = SolveTablesExpression(
             "in_iface == eth0 and dst_port in 1:100 and src_port in 1000:2000", st
         ).get_constraints()
