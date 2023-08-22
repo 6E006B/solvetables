@@ -279,11 +279,12 @@ class SolveTables:
             # print("constraints", constraints)
             if constraints is not None:
                 keep_constraints = constraints
+                target_constraints = self.get_chain_constraints(chain=target)
                 # Include constraints from target chain
                 if target_constraints is not None:
                     constraints = And(constraints, target_constraints)
                     # only store combined constraints if target constraints is not False
-                    # i.e. DROP or REJECT
+                    # i.e. DROP, REJECT or RETURN
                     if target_constraints is not False:
                         keep_constraints = constraints
 
