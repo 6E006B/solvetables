@@ -422,7 +422,7 @@ class SolveTables:
 
 
 class SolveTablesExpression:
-    def __init__(self, expression: str, st: SolveTables):
+    def __init__(self, expression: str | list[str], st: SolveTables):
         self.var_table = {
             "src_ip": st.src_ip_model,
             "dst_ip": st.dst_ip_model,
@@ -446,6 +446,8 @@ class SolveTablesExpression:
             "or": Or,
         }
 
+        if isinstance(expression, str):
+            expression = [expression]
         expression = expression[0].split() if len(expression) == 1 else expression
         self.constraints = self._translate_expression(expression=expression)
 
