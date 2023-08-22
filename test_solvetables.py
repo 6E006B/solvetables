@@ -496,3 +496,12 @@ class TestReturnChain(BaseTest):
             chain="INPUT", constraints=additional_constraints
         )
         assert model is None
+
+    def test_return_hit_default_protocol(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "protocol in icmp,udp", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
