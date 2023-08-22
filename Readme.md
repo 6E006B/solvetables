@@ -30,8 +30,10 @@ Available operator:
 - `<`
 - `>`
 - `in` [^1]
+- `!in` [^2]
 
 [^1]: `in` operator is prefixed by a variables and can have list of elements, separated by `,` or a range of values via `:` as the second operand. For `src_ip` and `dst_ip` it can also be followed by a CIDR network, denoted via a `/`.
+[^2]: `!in` is the negation of the `in` operator.
 
 ## Example
 
