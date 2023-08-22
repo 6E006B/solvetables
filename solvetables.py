@@ -325,14 +325,16 @@ class SolveTables:
         return simplify(combined_constraints)
 
     def check_and_get_model(
-        self, chain: str, constraints: (Probe | BoolRef)
+        self, chain: str, constraints: (None | BoolRef)
     ) -> None | ModelRef:
         m = None
         s = Solver()
         rules = self.build_constraints(chain)
         # print("final constraints:")
         # print(And(constraints, rules))
-        s.add(constraints, rules)
+        s.add(rules)
+        if constraints is not None:
+            s.add(constraints)
         result = s.check()
         if result == sat:
             m = s.model()
