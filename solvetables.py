@@ -390,7 +390,8 @@ class SolveTables:
         model_constraints = And(model_constraints_list)
         return self.identify_rule(chain=chain, constraints=model_constraints)
 
-    def identify_rule(self, chain: str, constraints: BoolRef) -> None | list[str]:
+    def identify_rule(self, chain: str, constraints: BoolRef) -> None | list[Rule]:
+        hit_rules = []
         s = Solver()
         for rule in self.chain_rules[chain]:
             rule_constraints = rule.get_constraints(self)
@@ -400,22 +401,25 @@ class SolveTables:
                 )
                 s.add(all_constraints)
                 if s.check() == sat:
+                    hit_rules.append(rule)
                     match rule.get_target():
-                        case "ACCEPT":
-                            return [rule.iptables_rule]
+                        case "ACCEPT" | "RETURN":
+                            return hit_rules
                         case "DROP" | "REJECT":
                             print(
                                 "You should never see this, please report your parameters."
                             )
-                            continue
+                            print(f"Hit {rule.get_target()} rule:")
+                            print(f"  {rule.iptables_rule}")
+                            return hit_rules
                         case _:
                             additional_rules = self.identify_rule(
                                 chain=rule.get_target(), constraints=constraints
                             )
-                            if additional_rules is None:
-                                continue
-                            else:
-                                return [rule.iptables_rule] + additional_rules
+                            if additional_rules is not None:
+                                hit_rules += additional_rules
+                                if additional_rules[-1].get_target() != "RETURN":
+                                    return hit_rules
             else:
                 print(
                     "This shouldn't happen! Rule constraints are None for:",
