@@ -247,6 +247,7 @@ class SolveTables:
             "ACCEPT": True,
             "DROP": False,
             "REJECT": False,
+            "RETURN": False,
         }
         self.src_ip_model: BitVecRef = BitVec("src_ip_model", 32)
         self.dst_ip_model: BitVecRef = BitVec("dst_ip_model", 32)
