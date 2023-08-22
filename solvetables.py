@@ -458,7 +458,7 @@ class SolveTablesExpression:
         expression = expression[0].split() if len(expression) == 1 else expression
         self.constraints = self._translate_expression(expression=expression)
 
-    def get_constraints(self) -> BoolRef:
+    def get_constraints(self) -> None | BoolRef:
         return self.constraints
 
     def _translate_in_expression(self, operand1: str, operand2: str) -> BoolRef:
@@ -510,7 +510,7 @@ class SolveTablesExpression:
             sub_constraint = op(top1, top2)
         return sub_constraint
 
-    def _translate_expression(self, expression: list[str]) -> Probe | BoolRef:
+    def _translate_expression(self, expression: list[str]) -> None | BoolRef:
         constraints = None
         concat_op = None
 
