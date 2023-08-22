@@ -380,3 +380,71 @@ class TestInputChain(BaseTest):
         assert len(rules) == 1
         assert rules[0].iptables_rule == self.IPTABLES_RULES[2]
 
+
+class TestReturnChain(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT -s 0.0.0.0/0 -d 0.0.0.0/0 -j DOS_PROTECT",
+        "-A INPUT -s 0.0.0.0/0 -d 0.0.0.0/0 -p tcp -m tcp --dport 22 -j DROP",
+        "-A INPUT -p tcp -s 192.168.0.0/16 -d 192.168.0.0/16 -j ACCEPT",
+        "-A DOS_PROTECT -p tcp -s 0.0.0.0/0 -d 0.0.0.0/0 -m tcp --tcp-flags RST RST -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 5 -j RETURN",
+        "-A DOS_PROTECT -p tcp -s 0.0.0.0/0 -d 0.0.0.0/0 -m tcp --tcp-flags RST RST -j DROP",
+        "-A DOS_PROTECT -p tcp -s 0.0.0.0/0 -d 0.0.0.0/0 -j ACCEPT",
+    ]
+
+    def test_hit_return_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+        model_dict = st.translate_model(model)
+        assert model_dict["src_port"] != 22
+        src_ip_net = ipaddress.IPv4Network("192.168.0.0/16")
+        assert model_dict["src_ip"] in src_ip_net
+        dst_ip_net = ipaddress.IPv4Network("192.168.0.0/16")
+        assert model_dict["dst_ip"] in dst_ip_net
+        assert model_dict["protocol"] == "tcp"
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 3
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+        assert rules[1].iptables_rule == self.IPTABLES_RULES[3]
+        assert rules[2].iptables_rule == self.IPTABLES_RULES[2]
+
+    def test_hit_return(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1 and dst_port == 80", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+        model_dict = st.translate_model(model)
+        assert model_dict["input_interface"] == "eth1"
+        assert model_dict["dst_port"] == 80
+        assert model_dict["src_port"] != 22
+        src_ip_net = ipaddress.IPv4Network("192.168.0.0/16")
+        assert model_dict["src_ip"] in src_ip_net
+        dst_ip_net = ipaddress.IPv4Network("192.168.0.0/16")
+        assert model_dict["dst_ip"] in dst_ip_net
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 3
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+        assert rules[1].iptables_rule == self.IPTABLES_RULES[3]
+        assert rules[2].iptables_rule == self.IPTABLES_RULES[2]
+
+    def test_hit_drop_after(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1 and dst_port == 22 and protocol == tcp and src_ip == 192.168.1.1",
+            st,
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
