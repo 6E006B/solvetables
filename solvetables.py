@@ -238,8 +238,6 @@ class Rule:
 
 
 class SolveTables:
-    BASE_TARGETS = ["ACCEPT", "DROP", "REJECT"]
-
     def __init__(self, default_policy: str) -> None:
         self.accept_default = default_policy == "ACCEPT"
         self.chain_rules: dict[str, list[Rule]] = defaultdict(list)
@@ -280,11 +278,6 @@ class SolveTables:
             constraints = rule.get_constraints(self)
             # print("constraints", constraints)
             if constraints is not None:
-                target_constraints = self.get_chain_constraints(chain=target)
-                # if target not in self.BASE_TARGETS:
-                #     print(f"Additional constraints for '{target}' are:")
-                #     print(target_constraints)
-
                 keep_constraints = constraints
                 # Include constraints from target chain
                 if target_constraints is not None:
