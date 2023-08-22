@@ -323,7 +323,7 @@ class TestInputChain(BaseTest):
         assert model_dict["input_interface"] == "eth0"
         assert model_dict["dst_port"] in range(20, 22)
         assert model_dict["src_port"] in range(1024, 65536)
-        src_ip_net = ipaddress.IPv4Network("192.168.14.0/24")
+        src_ip_net = ipaddress.IPv4Network("192.168.14.32/30")
         assert model_dict["src_ip"] in src_ip_net
         dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
         assert model_dict["dst_ip"] in dst_ip_net
