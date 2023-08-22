@@ -1,6 +1,6 @@
 import ipaddress
 import pytest
-from solvetables import SolveTables
+from solvetables import SolveTables, SolveTablesExpression
 
 # TODO: Add explicit model result where known
 
@@ -22,14 +22,18 @@ class TestDefaultAccept(BaseTest):
     IPTABLES_RULES = ["-A INPUT -i eth0 -j DROP"]
 
     def test_input_drop(self, st: SolveTables):
-        additional_constraints = st.translate_expression("in_iface == eth0".split())
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth0", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
         assert model is None
 
     def test_input_default_out(self, st: SolveTables):
-        additional_constraints = st.translate_expression("out_iface == eth1".split())
+        additional_constraints = SolveTablesExpression(
+            "out_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -39,11 +43,13 @@ class TestDefaultAccept(BaseTest):
         assert model_dict["output_interface"] == "eth1"
         assert model_dict["input_interface"] != "eth0"
 
-        rules = st.identify_rule(chain="INPUT", model=model)
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is None
 
     def test_input_default_in(self, st: SolveTables):
-        additional_constraints = st.translate_expression("in_iface == eth1".split())
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -58,7 +64,9 @@ class TestDefaultDrop(BaseTest):
     IPTABLES_RULES = ["-A INPUT -i eth0 -j ACCEPT"]
 
     def test_input_accept(self, st: SolveTables):
-        additional_constraints = st.translate_expression("in_iface == eth0".split())
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth0", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -67,13 +75,15 @@ class TestDefaultDrop(BaseTest):
         model_dict = st.translate_model(model)
         assert model_dict["input_interface"] == "eth0"
 
-        rules = st.identify_rule(chain="INPUT", model=model)
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[0]
 
     def test_input_default_out(self, st: SolveTables):
-        additional_constraints = st.translate_expression("out_iface == eth1".split())
+        additional_constraints = SolveTablesExpression(
+            "out_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -83,13 +93,15 @@ class TestDefaultDrop(BaseTest):
         assert model_dict["input_interface"] == "eth0"
         assert model_dict["output_interface"] == "eth1"
 
-        rules = st.identify_rule(chain="INPUT", model=model)
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[0]
 
     def test_input_default_in(self, st: SolveTables):
-        additional_constraints = st.translate_expression("in_iface == eth1".split())
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -101,9 +113,9 @@ class TestIndirection(BaseTest):
     IPTABLES_RULES = ["-A FORWARD -i eth2 -j INDI", "-A INDI -o eth1 -j ACCEPT"]
 
     def test_indirection_exact(self, st: SolveTables):
-        additional_constraints = st.translate_expression(
-            "in_iface == eth2 and out_iface == eth1".split()
-        )
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth2 and out_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
@@ -113,14 +125,16 @@ class TestIndirection(BaseTest):
         assert model_dict["input_interface"] == "eth2"
         assert model_dict["output_interface"] == "eth1"
 
-        rules = st.identify_rule(chain="FORWARD", model=model)
+        rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 2
         assert rules[0] == self.IPTABLES_RULES[0]
         assert rules[1] == self.IPTABLES_RULES[1]
 
     def test_indirection_first(self, st: SolveTables):
-        additional_constraints = st.translate_expression("in_iface == eth2".split())
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth2", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
@@ -130,14 +144,16 @@ class TestIndirection(BaseTest):
         assert model_dict["input_interface"] == "eth2"
         assert model_dict["output_interface"] == "eth1"
 
-        rules = st.identify_rule(chain="FORWARD", model=model)
+        rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 2
         assert rules[0] == self.IPTABLES_RULES[0]
         assert rules[1] == self.IPTABLES_RULES[1]
 
     def test_indirection_last(self, st: SolveTables):
-        additional_constraints = st.translate_expression("out_iface == eth1".split())
+        additional_constraints = SolveTablesExpression(
+            "out_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
@@ -147,30 +163,34 @@ class TestIndirection(BaseTest):
         assert model_dict["input_interface"] == "eth2"
         assert model_dict["output_interface"] == "eth1"
 
-        rules = st.identify_rule(chain="FORWARD", model=model)
+        rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 2
         assert rules[0] == self.IPTABLES_RULES[0]
         assert rules[1] == self.IPTABLES_RULES[1]
 
     def test_indirection_inverse(self, st: SolveTables):
-        additional_constraints = st.translate_expression(
-            "in_iface == eth1 and out_iface == eth2".split()
-        )
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1 and out_iface == eth2", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
         assert model is None
 
     def test_indirection_inverse_first(self, st: SolveTables):
-        additional_constraints = st.translate_expression("in_iface == eth1".split())
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
         assert model is None
 
     def test_indirection_inverse_last(self, st: SolveTables):
-        additional_constraints = st.translate_expression("out_iface == eth2".split())
+        additional_constraints = SolveTablesExpression(
+            "out_iface == eth2", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
@@ -182,14 +202,18 @@ class TestExplicitDrop(BaseTest):
     IPTABLES_RULES = ["-A FORWARD -i eth0 -j DROP", "-A FORWARD -o eth1 -j ACCEPT"]
 
     def test_explicit_drop_hit(self, st: SolveTables):
-        additional_constraints = st.translate_expression("in_iface == eth0".split())
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth0", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
         assert model is None
 
     def test_explicit_drop_not_hit(self, st: SolveTables):
-        additional_constraints = st.translate_expression("in_iface == eth1".split())
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
@@ -199,13 +223,15 @@ class TestExplicitDrop(BaseTest):
         assert model_dict["input_interface"] == "eth1"
         assert model_dict["output_interface"] == "eth1"
 
-        rules = st.identify_rule(chain="FORWARD", model=model)
+        rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[1]
 
     def test_explicit_drop_hit_accept(self, st: SolveTables):
-        additional_constraints = st.translate_expression("out_iface == eth1".split())
+        additional_constraints = SolveTablesExpression(
+            "out_iface == eth1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
@@ -215,15 +241,15 @@ class TestExplicitDrop(BaseTest):
         assert model_dict["input_interface"] != "eth0"
         assert model_dict["output_interface"] == "eth1"
 
-        rules = st.identify_rule(chain="FORWARD", model=model)
+        rules = st.identify_rule_from_model(chain="FORWARD", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[1]
 
     def test_explicit_drop_hit_default(self, st: SolveTables):
-        additional_constraints = st.translate_expression(
-            "in_iface == eth1 and out_iface == eth0".split()
-        )
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1 and out_iface == eth0", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="FORWARD", constraints=additional_constraints
         )
@@ -239,9 +265,9 @@ class TestInputChain(BaseTest):
     ]
 
     def test_hit_implicit_sport(self, st: SolveTables):
-        additional_constraints = st.translate_expression(
-            "in_iface == eth1 and dst_port == 80".split()
-        )
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1 and dst_port == 80", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -256,15 +282,15 @@ class TestInputChain(BaseTest):
         dst_ip_net = ipaddress.IPv4Network("192.168.4.1/32")
         assert model_dict["dst_ip"] in dst_ip_net
 
-        rules = st.identify_rule(chain="INPUT", model=model)
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[1]
 
     def test_hit_not_ip(self, st: SolveTables):
-        additional_constraints = st.translate_expression(
-            "dst_ip != 192.168.4.1".split()
-        )
+        additional_constraints = SolveTablesExpression(
+            "dst_ip != 192.168.4.1", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -279,15 +305,15 @@ class TestInputChain(BaseTest):
         dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
         assert model_dict["dst_ip"] in dst_ip_net
 
-        rules = st.identify_rule(chain="INPUT", model=model)
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[2]
 
     def test_in_expression_cidr(self, st: SolveTables):
-        additional_constraints = st.translate_expression(
-            "src_ip in 192.168.14.32/30".split()
-        )
+        additional_constraints = SolveTablesExpression(
+            "src_ip in 192.168.14.32/30", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -302,15 +328,16 @@ class TestInputChain(BaseTest):
         dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
         assert model_dict["dst_ip"] in dst_ip_net
 
-        rules = st.identify_rule(chain="INPUT", model=model)
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[2]
 
     def test_in_expression_list(self, st: SolveTables):
-        additional_constraints = st.translate_expression(
-            "src_ip in 192.168.14.32/30 and dst_port >= 21 and src_port in 6000,7000,8000".split()
-        )
+        additional_constraints = SolveTablesExpression(
+            "src_ip in 192.168.14.32/30 and dst_port >= 21 and src_port in 6000,7000,8000",
+            st,
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -325,15 +352,15 @@ class TestInputChain(BaseTest):
         dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
         assert model_dict["dst_ip"] in dst_ip_net
 
-        rules = st.identify_rule(chain="INPUT", model=model)
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[2]
 
     def test_in_expression_range(self, st: SolveTables):
-        additional_constraints = st.translate_expression(
-            "in_iface == eth0 and dst_port in 1:100 and src_port in 1000:2000".split()
-        )
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth0 and dst_port in 1:100 and src_port in 1000:2000", st
+        ).get_constraints()
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
@@ -348,7 +375,7 @@ class TestInputChain(BaseTest):
         dst_ip_net = ipaddress.IPv4Network("192.168.14.1/32")
         assert model_dict["dst_ip"] in dst_ip_net
 
-        rules = st.identify_rule(chain="INPUT", model=model)
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
         assert rules is not None
         assert len(rules) == 1
         assert rules[0] == self.IPTABLES_RULES[2]
