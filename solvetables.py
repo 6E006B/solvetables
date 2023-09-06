@@ -367,7 +367,7 @@ class SolveTables:
         }
         return translated_model
 
-    def identify_rule_from_model(self, chain: str, model: ModelRef) -> None | list[str]:
+    def identify_rule_from_model(self, chain: str, model: ModelRef) -> None | list[Rule]:
         model_constraints_list = []
         for var in [
             self.src_ip_model,
@@ -600,7 +600,7 @@ def main():
                 )
             )
             for rule in rules:
-                print(rule)
+                print(rule.iptables_rule)
         else:
             print("Something went wrong! Unable to identify associated rule /o\\")
 
