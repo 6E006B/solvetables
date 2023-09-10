@@ -1,0 +1,37 @@
+[project]
+name = "solvetables"
+version = "1.0"
+authors = [
+  { name="Christopher Schwardt", email="christopher.schwardt@gmx.de" },
+]
+description = "Python script to translate `iptables` rules into `Z3` constraints and allow reasoning on them."
+readme="Readme.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project.optional-dependencies]
+test = [
+    "black",
+    "pytest"
+]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+pythonpath = "src"
+
+[project.scripts]
+solvetables = "solvetables:solvetables.main"
+
+[project.urls]
+"Homepage" = "https://github.com/6E006B/solvetables"
+"Bug Tracker" = "https://github.com/6E006B/solvetables/issues"
