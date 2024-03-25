@@ -63,6 +63,7 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     parser.add_argument("--dst-type")
     parser.add_argument("--set-mss")
     parser.add_argument("--limit")
+    parser.add_argument("--limit-burst")
     parser.add_argument("--log-prefix")
     parser.add_argument("--log-level")
     parser.add_argument("--hashlimit-upto")
