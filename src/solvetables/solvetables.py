@@ -322,7 +322,7 @@ class SolveTables:
         return simplify(combined_constraints)
 
     def check_and_get_model(
-        self, chain: str, constraints: (None | BoolRef)
+        self, chain: str, constraints: None | BoolRef
     ) -> None | ModelRef:
         m = None
         s = Solver()
@@ -369,7 +369,9 @@ class SolveTables:
         }
         return translated_model
 
-    def identify_rule_from_model(self, chain: str, model: ModelRef) -> None | list[Rule]:
+    def identify_rule_from_model(
+        self, chain: str, model: ModelRef
+    ) -> None | list[Rule]:
         model_constraints_list = []
         for var in [
             self.src_ip_model,
