@@ -84,6 +84,7 @@ class Rule:
         "udplite",
         "icmp",
         "icmpv6",
+        "igmp",
         "esp",
         "ah",
         "sctp",
