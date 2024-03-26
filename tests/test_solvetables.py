@@ -576,3 +576,119 @@ class TestReturnChain(BaseTest):
             chain="INPUT", constraints=additional_constraints
         )
         assert model is None
+
+
+class TestEmptyChainDropDefault(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+
+class TestEmptyChainAcceptDefault(BaseTest):
+    DEFAULT_POLICY = "ACCEPT"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+
+class TestEmptyChainAcceptDefaultDropRule(BaseTest):
+    DEFAULT_POLICY = "ACCEPT"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+        "-A INPUT -j DROP",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+
+class TestEmptyChainDropDefaultAcceptRule(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+        "-A INPUT -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+
+class TestDropChainAcceptDefault(BaseTest):
+    DEFAULT_POLICY = "ACCEPT"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+        "-A FIRST -j DROP",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        print(st.translate_model(model))
+        print("interfaces:", st.chain_rules["INPUT"][0].INTERFACE_ENUM)
+        assert model is None
+
+    def test_constrained(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 0.0.0.0 and dst_ip == 0.0.0.0 and in_iface == eth2 and out_iface == eth2 and protocol == mh and src_port == 0 and dst_port == 0 and state == ESTABLISHED",
+            st,
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        print(st.translate_model(model))
+        assert model is None
+
+
+class TestDropChainDropDefault(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+        "-A FIRST -j DROP",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+
+class TestAcceptChainDropDefault(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+        "-A FIRST -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
