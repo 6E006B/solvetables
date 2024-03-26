@@ -241,6 +241,7 @@ class Rule:
 
 class SolveTables:
     def __init__(self, default_policy: str) -> None:
+        self.reset_rules()
         self.accept_default = default_policy == "ACCEPT"
         self.chain_rules: dict[str, list[Rule]] = defaultdict(list)
         self.chain_constraints: dict[str, BoolRef] = {
@@ -258,6 +259,9 @@ class SolveTables:
         self.dst_port_model: BitVecRef = BitVec("dst_port_model", 16)
         self.state_model: BitVecRef = BitVec("state_model", 4)
         self.iptables_parser: argparse.ArgumentParser = create_iptables_argparse()
+
+    def reset_rules(self):
+        Rule.INTERFACE_ENUM = []
 
     def add_rule(self, rule: str):
         new_rule = Rule(rule)
