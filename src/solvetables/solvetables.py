@@ -308,9 +308,7 @@ class SolveTables:
         if self.accept_default:
             # Only add previously rules if they are not empty
             if previous_rules:
-                rules.append(And(Not(Or(previous_rules)), True))
-            else:
-                rules.append(True)
+                rules.append(Not(Or(previous_rules)))
         return Or(rules)
 
     def get_chain_constraints(self, chain: str) -> BoolRef:
