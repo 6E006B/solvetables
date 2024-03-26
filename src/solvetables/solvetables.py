@@ -268,6 +268,8 @@ class SolveTables:
         self.chain_rules[new_rule.get_chain()].append(new_rule)
 
     def _get_base_constraints(self) -> Probe | BoolRef:
+        if len(Rule.INTERFACE_ENUM) == 0:
+            Rule._get_or_add_interface_index("any")
         base_rules = And(
             ULT(self.protocol_model, len(Rule.PROTOCOL_ENUM)),
             ULT(self.input_interface_model, len(Rule.INTERFACE_ENUM)),
