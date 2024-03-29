@@ -239,17 +239,76 @@ class Rule:
         return self.constraints
 
 
+class Chain:
+    BASE_CHAINS: dict[str, BoolRef] = {
+        "ACCEPT": BoolVal(True),
+        "DROP": BoolVal(False),
+        "REJECT": BoolVal(False),
+        "RETURN": BoolVal(True),
+    }
+
+    def __init__(self, name: str, rules: list[Rule]) -> None:
+        self.name: str = name
+        self.rules: list[Rule] = rules
+        self._post_conditions: list[BoolRef] | None = None
+        self._inner_constraints: list[BoolRef] | None = None
+        if name in self.BASE_CHAINS:
+            self._inner_constraints = [self.BASE_CHAINS[name]]
+            self._post_conditions = []
+
+    def get_inner_constraints(self, solve_tables: "SolveTables") -> list[BoolRef]:
+        if self._inner_constraints is None:
+            self._generate_conditions_and_constraints(solve_tables)
+        return self._inner_constraints
+
+    def get_post_conditions(self, solve_tables: "SolveTables") -> list[BoolRef]:
+        if self._post_conditions is None:
+            self._generate_conditions_and_constraints(solve_tables)
+        return self._post_conditions
+
+    def _generate_conditions_and_constraints(self, solve_tables: "SolveTables"):
+        inner_constraints = []
+        pre_conditions = [BoolVal(False)]
+        internal_preconditions = []
+        for rule in self.rules:
+            target: str = rule.get_target()
+            rule_constraints = rule.get_constraints(solve_tables)
+            new_preconditions = []
+            if rule_constraints is not None:
+                target_chain: Chain = solve_tables.chains[target]
+                if target not in ["DROP", "REJECT", "RETURN"]:
+                    target_inner_constraints = target_chain.get_inner_constraints(
+                        solve_tables
+                    )
+                    inner_constraints.append(
+                        And(
+                            Not(Or(pre_conditions + internal_preconditions)),
+                            rule_constraints,
+                            Or(target_inner_constraints),
+                        )
+                    )
+                if target == "RETURN":
+                    internal_preconditions.append(rule_constraints)
+                else:
+                    new_preconditions.append(rule_constraints)
+                    target_post_conditions = target_chain.get_post_conditions(
+                        solve_tables
+                    )
+                    if len(target_post_conditions) > 0:
+                        new_preconditions.append(Or(target_post_conditions))
+                # Make sure previous "RETURN"s are taken into account
+                if len(internal_preconditions) > 0:
+                    new_preconditions.append(Not(Or(internal_preconditions)))
+            pre_conditions.append(And(new_preconditions))
+        self._inner_constraints = inner_constraints
+        self._post_conditions = pre_conditions
+
+
 class SolveTables:
-    def __init__(self, default_policy: str) -> None:
+    def __init__(self, default_policy: str, rules: list[str]) -> None:
         self.reset_rules()
         self.accept_default = default_policy == "ACCEPT"
-        self.chain_rules: dict[str, list[Rule]] = defaultdict(list)
-        self.chain_constraints: dict[str, BoolRef] = {
-            "ACCEPT": True,
-            "DROP": False,
-            "REJECT": False,
-            "RETURN": False,
-        }
+        self.chains = self._init_chains(rules)
         self.src_ip_model: BitVecRef = BitVec("src_ip_model", 32)
         self.dst_ip_model: BitVecRef = BitVec("dst_ip_model", 32)
         self.input_interface_model: BitVecRef = BitVec("input_interface_model", 8)
@@ -263,9 +322,17 @@ class SolveTables:
     def reset_rules(self):
         Rule.INTERFACE_ENUM = []
 
-    def add_rule(self, rule: str):
-        new_rule = Rule(rule)
-        self.chain_rules[new_rule.get_chain()].append(new_rule)
+    def _init_chains(self, rules: list[str]) -> dict[str, Chain]:
+        chains = defaultdict(lambda: Chain("UNDEFINED", []))
+        for name in Chain.BASE_CHAINS.keys():
+            chains[name] = Chain(name, [])
+        chain_rules = defaultdict(list)
+        for rule in rules:
+            new_rule = Rule(rule)
+            chain_rules[new_rule.get_chain()].append(new_rule)
+        for chain_name, rules_list in chain_rules.items():
+            chains[chain_name] = Chain(chain_name, rules_list)
+        return chains
 
     def _get_base_constraints(self) -> Probe | BoolRef:
         if len(Rule.INTERFACE_ENUM) == 0:
@@ -275,55 +342,31 @@ class SolveTables:
             ULT(self.input_interface_model, len(Rule.INTERFACE_ENUM)),
             ULT(self.output_interface_model, len(Rule.INTERFACE_ENUM)),
             ULT(self.state_model, len(Rule.STATE_ENUM)),
+            # ULE(0, self.src_ip_model),
+            # ULE(self.src_ip_model, 4294967295),
+            # ULE(0, self.dst_ip_model),
+            # ULE(self.dst_ip_model, 4294967295),
+            # ULE(0, self.src_port_model),
+            # ULE(self.src_port_model, 65535),
+            # ULE(0, self.dst_port_model),
+            # ULE(self.dst_port_model, 65535),
         )
         return base_rules
 
-    def build_chain_constraints(self, chain: str) -> BoolRef:
-        previous_rules = []
-        rules = []
-        for rule in self.chain_rules[chain]:
-            target = rule.get_target()
-            constraints = rule.get_constraints(self)
-            # print("constraints", constraints)
-            if constraints is not None:
-                keep_constraints = constraints
-                target_constraints = self.get_chain_constraints(chain=target)
-                # Include constraints from target chain
-                if target_constraints is not None:
-                    constraints = And(constraints, target_constraints)
-                    # only store combined constraints if target constraints is not False
-                    # i.e. DROP, REJECT or RETURN
-                    if target_constraints is not False:
-                        keep_constraints = constraints
-
-                # Only add previously rules if they are not empty
-                if previous_rules:
-                    rules.append(And(Not(Or(previous_rules)), constraints))
-                else:
-                    rules.append(constraints)
-
-                # Keep a list of previous constraints
-                # These will be negated and preprended to the next rule
-                previous_rules.append(keep_constraints)
-        if self.accept_default:
-            # Only add previously rules if they are not empty
-            if previous_rules:
-                rules.append(Not(Or(previous_rules)))
-        return Or(rules)
-
-    def get_chain_constraints(self, chain: str) -> BoolRef:
-        if chain not in self.chain_constraints:
-            self.chain_constraints[chain] = self.build_chain_constraints(chain=chain)
-        return self.chain_constraints[chain]
-
-    def build_constraints(self, chain: str) -> Probe | BoolRef:
+    def build_constraints(self, chain_name: str) -> Probe | BoolRef:
         # print("self.constraints:", self.constraints)
-        chain_constraints = self.get_chain_constraints(chain=chain)
+        # chain_constraints = self.get_chain_constraints(chain=chain, add_default=True)
+        chain = self.chains[chain_name]
+        chain_constraints = chain.get_inner_constraints(self)
+        # Add handling of default ACCEPT target
+        if self.accept_default:
+            chain_constraints.append(Not(Or(chain.get_post_conditions(self))))
         base_rules = self._get_base_constraints()
 
-        combined_constraints = And(chain_constraints, base_rules)
+        combined_constraints = And(Or(chain_constraints), base_rules)
         # return combined_constraints
-        return simplify(combined_constraints)
+        return combined_constraints
+        # return simplify(combined_constraints)
 
     def check_and_get_model(
         self, chain: str, constraints: None | BoolRef
@@ -336,6 +379,7 @@ class SolveTables:
         s.add(rules)
         if constraints is not None:
             s.add(constraints)
+        # print(s.sexpr())
         result = s.check()
         if result == sat:
             m = s.model()
@@ -395,7 +439,7 @@ class SolveTables:
     def identify_rule(self, chain: str, constraints: BoolRef) -> None | list[Rule]:
         hit_rules = []
         s = Solver()
-        for rule in self.chain_rules[chain]:
+        for rule in self.chains[chain].rules:
             rule_constraints = rule.get_constraints(self)
             if rule_constraints is not None:
                 all_constraints = simplify(
@@ -582,11 +626,13 @@ def main():
         else:
             default_policy = match.group("default_policy")
             print(f"identified default policy for {args.chain} is {default_policy}")
-    st = SolveTables(default_policy=default_policy)
 
+    rules: list[str] = []
     for rule_line in iptables_rules_file.splitlines():
         if rule_line.startswith("-A "):
-            st.add_rule(rule_line)
+            rules.append(rule_line)
+
+    st = SolveTables(default_policy=default_policy, rules=rules)
 
     expression = SolveTablesExpression(args.expression, st)
     additional_constraints = expression.get_constraints()
