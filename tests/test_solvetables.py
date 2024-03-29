@@ -11,9 +11,10 @@ class BaseTest:
 
     @pytest.fixture
     def st(self) -> SolveTables:
-        st = SolveTables(default_policy=self.DEFAULT_POLICY)
+        rules = []
         for rule in self.IPTABLES_RULES:
-            st.add_rule(rule)
+            rules.append(rule)
+        st = SolveTables(default_policy=self.DEFAULT_POLICY, rules=rules)
         return st
 
 
@@ -648,8 +649,8 @@ class TestDropChainAcceptDefault(BaseTest):
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
-        print(st.translate_model(model))
-        print("interfaces:", st.chain_rules["INPUT"][0].INTERFACE_ENUM)
+        # print(st.translate_model(model))
+        # print("interfaces:", st.chain_rules["INPUT"][0].INTERFACE_ENUM)
         assert model is None
 
     def test_constrained(self, st: SolveTables):
@@ -660,7 +661,7 @@ class TestDropChainAcceptDefault(BaseTest):
         model = st.check_and_get_model(
             chain="INPUT", constraints=additional_constraints
         )
-        print(st.translate_model(model))
+        # print(st.translate_model(model))
         assert model is None
 
 
@@ -692,3 +693,53 @@ class TestAcceptChainDropDefault(BaseTest):
             chain="INPUT", constraints=additional_constraints
         )
         assert model is not None
+
+
+class TestDropChainDropDefaultAcceptRule(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+        "-A FIRST -j DROP",
+        "-A INPUT -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+
+class TestReturnChainDropDefaultAcceptRule(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+        "-A FIRST -j RETURN",
+        "-A FIRST -j DROP",
+        "-A INPUT -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+
+
+class TestReturnChainAcceptDefaultDropRule(BaseTest):
+    DEFAULT_POLICY = "ACCEPT"
+    IPTABLES_RULES = [
+        "-A INPUT -j FIRST",
+        "-A FIRST -j RETURN",
+        "-A FIRST -j ACCEPT",
+        "-A INPUT -j DROP",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
