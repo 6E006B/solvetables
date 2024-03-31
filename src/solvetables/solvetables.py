@@ -268,6 +268,8 @@ class Chain:
 
     def _generate_conditions_and_constraints(self, solve_tables: "SolveTables"):
         inner_constraints = []
+        # Create default pre-condition as False, so that Or'ing result is not changed
+        # (necessary for empty chains)
         pre_conditions = [BoolVal(False)]
         internal_preconditions = []
         for rule in self.rules:
@@ -296,10 +298,10 @@ class Chain:
                     )
                     if len(target_post_conditions) > 0:
                         new_preconditions.append(Or(target_post_conditions))
-                # Make sure previous "RETURN"s are taken into account
-                if len(internal_preconditions) > 0:
-                    new_preconditions.append(Not(Or(internal_preconditions)))
-            pre_conditions.append(And(new_preconditions))
+                    # Make sure previous "RETURN"s are taken into account
+                    if len(internal_preconditions) > 0:
+                        new_preconditions.append(Not(Or(internal_preconditions)))
+                    pre_conditions.append(And(new_preconditions))
         self._inner_constraints = inner_constraints
         self._post_conditions = pre_conditions
 
