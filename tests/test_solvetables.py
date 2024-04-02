@@ -968,7 +968,7 @@ class TestSimpleSubnetDefaultDrop(BaseTest):
         assert model is None
 
 
-class TestSimpleSubnetDefaultDrop(BaseTest):
+class TestSimpleNotSubnetDefaultDrop(BaseTest):
     DEFAULT_POLICY = "DROP"
     IPTABLES_RULES = [
         "-A INPUT ! -s 10.0.0.0/8 -j ACCEPT",
@@ -1057,7 +1057,7 @@ class TestSimpleSubnetDefaultDrop(BaseTest):
         assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
 
 
-class TestSimpleSubnetDefaultDrop(BaseTest):
+class TestSimpleNotIPDefaultDrop(BaseTest):
     DEFAULT_POLICY = "DROP"
     IPTABLES_RULES = [
         "-A INPUT ! -s 10.0.0.1 -j ACCEPT",
