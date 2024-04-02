@@ -966,3 +966,172 @@ class TestSimpleSubnetDefaultDrop(BaseTest):
             chain="INPUT", constraints=additional_constraints
         )
         assert model is None
+
+
+class TestSimpleSubnetDefaultDrop(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT ! -s 10.0.0.0/8 -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["src_ip"] not in ipaddress.IPv4Network("10.0.0.0/8")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_below_accept(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 1.1.1.1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["src_ip"] not in ipaddress.IPv4Network("10.0.0.0/8")
+        assert model_dict["src_ip"] == ipaddress.IPv4Address("1.1.1.1")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_above_accept(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 255.255.255.255", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["src_ip"] not in ipaddress.IPv4Network("10.0.0.0/8")
+        assert model_dict["src_ip"] == ipaddress.IPv4Address("255.255.255.255")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_hit_drop_address(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 10.0.0.1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_hit_drop_subnet(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip in 10.0.0.0/8", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_accept_not_subnet(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip !in 10.0.0.0/8", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["src_ip"] not in ipaddress.IPv4Network("10.0.0.0/8")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+
+class TestSimpleSubnetDefaultDrop(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT ! -s 10.0.0.1 -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["src_ip"] != ipaddress.IPv4Address("10.0.0.1")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_below_accept(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 1.1.1.1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["src_ip"] != ipaddress.IPv4Address("10.0.0.1")
+        assert model_dict["src_ip"] == ipaddress.IPv4Address("1.1.1.1")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_above_accept(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 255.255.255.255", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["src_ip"] not in ipaddress.IPv4Network("10.0.0.0/8")
+        assert model_dict["src_ip"] == ipaddress.IPv4Address("255.255.255.255")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_hit_drop(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 10.0.0.1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_accept_not_address(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip != 10.0.0.1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["src_ip"] != ipaddress.IPv4Address("10.0.0.1")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
