@@ -125,7 +125,7 @@ class Rule:
             ULE(var, int(cidr[-1])),
         ]
         if invert:
-            constraints = [Not(c) for c in constraints]
+            constraints = [Or([Not(c) for c in constraints])]
         return constraints
 
     def _create_interface_constraints(
@@ -183,7 +183,7 @@ class Rule:
             sub_constraints += self._create_ip_constraints(
                 st.src_ip_model, self.args.source
             )
-        if self.args.not_source:
+        if self.args.not_destination:
             sub_constraints += self._create_ip_constraints(
                 st.dst_ip_model, self.args.not_destination, invert=True
             )
