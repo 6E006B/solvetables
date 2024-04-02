@@ -1135,3 +1135,87 @@ class TestSimpleNotIPDefaultDrop(BaseTest):
         assert rules is not None
         assert len(rules) == 1
         assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+
+class TestNotInterfacesDefaultDrop(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT ! -i eth0 -j ACCEPT",
+        "-A INPUT -i eth1 -j DROP",
+        "-A INPUT -i eth2 -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["input_interface"] in ["eth1", "eth2"]
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_drop_eth0(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth0", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_hit_eth1(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["input_interface"] == "eth1"
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_hit_eth1(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "in_iface == eth2", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["input_interface"] == "eth2"
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_hit_not_eth0(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "in_iface != eth0", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["input_interface"] in ["eth1", "eth2"]
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
