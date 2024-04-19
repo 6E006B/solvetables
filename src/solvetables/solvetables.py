@@ -35,10 +35,14 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     sport_group = parser.add_mutually_exclusive_group()
     sport_group.add_argument("--sport", default="0:65535")
     sport_group.add_argument("--sports", dest="sport")
+    sport_group.add_argument("--not-sports", dest="not_sport")
+    sport_group.add_argument("--not-sport")
 
     dport_group = parser.add_mutually_exclusive_group()
     dport_group.add_argument("--dport", default="0:65535")
     dport_group.add_argument("--dports", dest="dport")
+    dport_group.add_argument("--not-dports", dest="not_dport")
+    dport_group.add_argument("--not-dport")
 
     state_group = parser.add_mutually_exclusive_group()
     state_group.add_argument("--state")
@@ -163,20 +167,29 @@ class Rule:
                 constraint = Not(constraint)
             return [constraint]
 
-    def _create_port_constraints(self, var: BitVecRef, port: str) -> list[BoolRef]:
-        if ":" in port:
-            port_range = port.split(":")
-            port_min = int(port_range[0])
-            port_max = int(port_range[-1])
-            return [
-                ULE(port_min, var),
-                ULE(var, port_max),
-            ]
-        elif "," in port:
+    def _create_port_constraints(
+        self, var: BitVecRef, port: str, invert: bool = False
+    ) -> list[BoolRef]:
+        ports = [port]
+        constraints = []
+        if "," in port:
             ports = port.split(",")
-            return [Or([var == p for p in ports])]
-        else:
-            return [var == int(port)]
+        for port in ports:
+            if ":" in port:
+                port_range = port.split(":")
+                port_min = int(port_range[0])
+                port_max = int(port_range[-1])
+                if invert:
+                    constraints.append(Or(ULT(var, port_min), ULT(port_max, var)))
+                else:
+                    constraints.append(ULE(port_min, var))
+                    constraints.append(ULE(var, port_max))
+            else:
+                constraint = var == int(port)
+                if invert:
+                    constraint = Not(constraint)
+                constraints.append(constraint)
+        return constraints
 
     def _create_state_constraints(self, var: BitVecRef, state: str) -> list[BoolRef]:
         states = []
@@ -228,12 +241,22 @@ class Rule:
             sub_constraints += self._create_protocol_constraints(
                 st.protocol_model, self.args.protocol
             )
-        sub_constraints += self._create_port_constraints(
-            st.src_port_model, self.args.sport
-        )
-        sub_constraints += self._create_port_constraints(
-            st.dst_port_model, self.args.dport
-        )
+        if self.args.not_sport:
+            sub_constraints += self._create_port_constraints(
+                st.src_port_model, self.args.not_sport, invert=True
+            )
+        else:
+            sub_constraints += self._create_port_constraints(
+                st.src_port_model, self.args.sport
+            )
+        if self.args.not_dport:
+            sub_constraints += self._create_port_constraints(
+                st.dst_port_model, self.args.not_dport, invert=True
+            )
+        else:
+            sub_constraints += self._create_port_constraints(
+                st.dst_port_model, self.args.dport
+            )
         if self.args.state is not None:
             sub_constraints += self._create_state_constraints(
                 st.state_model, self.args.state
