@@ -56,6 +56,7 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     parser.add_argument("-f", "--fragment", action="store_true")
     parser.add_argument("-c", "--set-counters")
     parser.add_argument("--mark")
+    parser.add_argument("--not-mark")
     parser.add_argument("--set-xmark")
     parser.add_argument("--to-source")
     parser.add_argument("--to-destination")
@@ -73,6 +74,16 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     parser.add_argument("--hashlimit-htable-expire")
     parser.add_argument("--remove", action="store_true")
     parser.add_argument("--reject-with")
+    parser.add_argument("--comment")
+    parser.add_argument("--set-dscp")
+    parser.add_argument("--uid-owner")
+    parser.add_argument("--set-class")
+    parser.add_argument("--on-port")
+    parser.add_argument("--on-ip")
+    parser.add_argument("--tproxy-mark")
+    parser.add_argument("-n")
+    parser.add_argument("--u32")
+    parser.add_argument("--pkt-type")
     return parser
 
 
