@@ -8,3 +8,5 @@
   - don't use the first and last IPs of a network, like 192.168.0.0
 
 - Exclude output interface from INPUT rules and check for other chain specific setups.
+
+- Warn on flags in rules, which are not handled.
