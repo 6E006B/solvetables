@@ -353,7 +353,6 @@ class SolveTables:
         self.src_port_model: BitVecRef = BitVec("src_port_model", 16)
         self.dst_port_model: BitVecRef = BitVec("dst_port_model", 16)
         self.state_model: BitVecRef = BitVec("state_model", 4)
-        self.iptables_parser: argparse.ArgumentParser = create_iptables_argparse()
 
     def reset_rules(self):
         Rule.INTERFACE_ENUM = []
