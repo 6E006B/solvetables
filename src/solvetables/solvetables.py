@@ -94,6 +94,25 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     return parser
 
 
+def extract_interfaces(iptables_rules_file: str) -> set[str]:
+    interfaces = set()
+    parser = create_iptables_argparse()
+
+    for rule_line in iptables_rules_file.splitlines():
+        if rule_line.startswith("-A "):
+            args, _ = parser.parse_known_args(shlex.split(rule_line))
+            for arg in [
+                "in_interface",
+                "not_in_interface",
+                "out_interface",
+                "not_out_interface",
+            ]:
+                if args.__dict__[arg]:
+                    interfaces.add(args.__dict__[arg])
+
+    return interfaces
+
+
 class Rule:
     PROTOCOL_ENUM = [
         "all",
@@ -353,9 +372,17 @@ class Chain:
 
 
 class SolveTables:
-    def __init__(self, default_policy: str, rules: list[str]) -> None:
+    def __init__(
+        self,
+        default_policy: str,
+        rules: list[str],
+        initial_interfaces: list[str] = [],
+    ) -> None:
         self.reset_rules()
         self.accept_default = default_policy == "ACCEPT"
+        self.initial_interfaces = initial_interfaces
+        for interface in initial_interfaces:
+            Rule._get_or_add_interface_index(interface)
         self.chains = self._init_chains(rules)
         self.src_ip_model: BitVecRef = BitVec("src_ip_model", 32)
         self.dst_ip_model: BitVecRef = BitVec("dst_ip_model", 32)
@@ -652,6 +679,13 @@ def main():
     parser.add_argument(
         "-p", "--default-policy", default=None, choices=["ACCEPT", "DROP", "REJECT"]
     )
+    parser.add_argument(
+        "-i",
+        "--interfaces",
+        default=[],
+        type=lambda x: [i.strip() for i in x.split(",")],
+        help="List of interfaces to explicitly add. NOTE: Interfaces no in the iptables rules need to be defined here or they will not be considered.",
+    )
     parser.add_argument("chain", choices=["INPUT", "FORWARD", "OUTPUT"])
     parser.add_argument("iptables_save_log", type=argparse.FileType("r"))
     parser.add_argument("expression", nargs="+")
@@ -674,12 +708,19 @@ def main():
             default_policy = match.group("default_policy")
             print(f"identified default policy for {args.chain} is {default_policy}")
 
+    interfaces = extract_interfaces(iptables_rules_file)
+    if args.interfaces:
+        interfaces.update(args.interfaces)
+    interfaces = list(interfaces)
+
     rules: list[str] = []
     for rule_line in iptables_rules_file.splitlines():
         if rule_line.startswith("-A "):
             rules.append(rule_line)
 
-    st = SolveTables(default_policy=default_policy, rules=rules)
+    st = SolveTables(
+        default_policy=default_policy, rules=rules, initial_interfaces=interfaces
+    )
 
     expression = SolveTablesExpression(args.expression, st)
     additional_constraints = expression.get_constraints()
