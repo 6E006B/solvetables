@@ -156,6 +156,11 @@ class Rule:
         if interface is None:
             return []
         else:
+            # TODO: add capability to handle interface names ending with '*'
+            if interface.endswith("*"):
+                print(
+                    f"WARNING: incorrectly handling interface {interface}. Consider manually expanding or patching solvetables and create a pull request ;)"
+                )
             constraint = var == self._get_or_add_interface_index(interface)
             if invert:
                 constraint = Not(constraint)
