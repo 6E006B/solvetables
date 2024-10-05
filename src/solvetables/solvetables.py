@@ -1,8 +1,9 @@
 import argparse
-from collections import defaultdict
 import ipaddress
 import re
 import shlex
+from collections import defaultdict
+
 from z3 import *
 
 
