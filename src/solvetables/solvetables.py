@@ -172,18 +172,23 @@ class Rule:
     def _create_interface_constraints(
         self, var: BitVecRef, interface: str, invert: bool = False
     ) -> list[BoolRef]:
-        if interface is None:
-            return []
-        else:
-            # TODO: add capability to handle interface names ending with '*'
+        constraints = []
+        if interface is not None:
             if interface.endswith("*"):
-                print(
-                    f"WARNING: incorrectly handling interface {interface}. Consider manually expanding or patching solvetables and create a pull request ;)"
-                )
-            constraint = var == self._get_or_add_interface_index(interface)
-            if invert:
-                constraint = Not(constraint)
-            return [constraint]
+                sub_constraints = []
+                for i in self.INTERFACE_ENUM:
+                    if i.startswith(interface.rstrip("*")):
+                        constraint = var == self._get_or_add_interface_index(i)
+                        if invert:
+                            constraint = Not(constraint)
+                        sub_constraints.append(constraint)
+                constraints = [And(sub_constraints) if invert else Or(sub_constraints)]
+            else:
+                constraint = var == self._get_or_add_interface_index(interface)
+                if invert:
+                    constraint = Not(constraint)
+                constraints = [constraint]
+        return constraints
 
     def _create_protocol_constraints(
         self, var: BitVecRef, protocol: str, invert: bool = False
