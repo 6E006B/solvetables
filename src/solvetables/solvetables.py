@@ -689,7 +689,7 @@ def main():
         "--interfaces",
         default=[],
         type=lambda x: [i.strip() for i in x.split(",")],
-        help="List of interfaces to explicitly add. NOTE: Interfaces no in the iptables rules need to be defined here or they will not be considered.",
+        help="List of interfaces to explicitly add. NOTE: Interfaces not in the iptables rules need to be defined here or they will not be considered.",
     )
     parser.add_argument("chain", choices=["INPUT", "FORWARD", "OUTPUT"])
     parser.add_argument("iptables_save_log", type=argparse.FileType("r"))
