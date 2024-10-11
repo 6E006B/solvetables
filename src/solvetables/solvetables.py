@@ -18,10 +18,12 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     source_group = parser.add_mutually_exclusive_group()
     source_group.add_argument("-s", "--source", default="0.0.0.0/0")
     source_group.add_argument("-ns", "--not-source")
+    source_group.add_argument("--src-range")
 
     destination_group = parser.add_mutually_exclusive_group()
     destination_group.add_argument("-d", "--destination", default="0.0.0.0/0")
     destination_group.add_argument("-nd", "--not-destination")
+    destination_group.add_argument("--dst-range")
 
     parser.add_argument("-j", "--jump")
 
@@ -169,6 +171,18 @@ class Rule:
             constraints = [Or([Not(c) for c in constraints])]
         return constraints
 
+    def _create_ip_range_constraints(
+        self, var: BitVecRef, ip_range: str, invert: bool = False
+    ) -> list[BoolRef]:
+        start_ip, end_ip = ip_range.split("-")
+        start_cidr = ipaddress.ip_network(start_ip)
+        end_cidr = ipaddress.ip_network(end_ip)
+        constraints = [
+            ULE(int(start_cidr[0]), var),
+            ULE(var, int(end_cidr[-1])),
+        ]
+        return constraints
+
     def _create_interface_constraints(
         self, var: BitVecRef, interface: str, invert: bool = False
     ) -> list[BoolRef]:
@@ -239,6 +253,10 @@ class Rule:
             sub_constraints += self._create_ip_constraints(
                 st.src_ip_model, self.args.not_source, invert=True
             )
+        elif self.args.src_range:
+            sub_constraints += self._create_ip_range_constraints(
+                st.src_ip_model, self.args.src_range
+            )
         else:
             sub_constraints += self._create_ip_constraints(
                 st.src_ip_model, self.args.source
@@ -246,6 +264,10 @@ class Rule:
         if self.args.not_destination:
             sub_constraints += self._create_ip_constraints(
                 st.dst_ip_model, self.args.not_destination, invert=True
+            )
+        elif self.args.dst_range:
+            sub_constraints += self._create_ip_range_constraints(
+                st.dst_ip_model, self.args.dst_range
             )
         else:
             sub_constraints += self._create_ip_constraints(
