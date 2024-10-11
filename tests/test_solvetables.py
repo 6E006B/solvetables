@@ -1282,3 +1282,211 @@ class TestInterfaceWildcardsDefaultDrop(BaseTest):
 
 
 # TODO: Add more test cases for interface wildcards
+
+
+class TestSrcRangeDefaultAccept(BaseTest):
+    DEFAULT_POLICY = "ACCEPT"
+    IPTABLES_RULES = [
+        "-A INPUT -s 192.168.0.15 -j ACCEPT",
+        "-A INPUT --src-range 192.168.0.12-192.168.0.25 -j DROP",
+        "-A INPUT -s 192.168.0.22 -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+
+        # No rules check as it might be hitting the default ACCEPT rule
+
+    def test_accept_ip(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 192.168.0.15", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["src_ip"] == ipaddress.IPv4Address("192.168.0.15")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_drop_in_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 192.168.0.20", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_drop_past_rule(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 192.168.0.22", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_drop_start_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 192.168.0.12", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_drop_end_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 192.168.0.25", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_accept_before_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 192.168.0.11", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["src_ip"] == ipaddress.IPv4Address("192.168.0.11")
+
+        # No rules is hit as it hits the default ACCEPT rule
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is None
+
+    def test_accept_after_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "src_ip == 192.168.0.26", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["src_ip"] == ipaddress.IPv4Address("192.168.0.26")
+
+        # No rules is hit as it hits the default ACCEPT rule
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is None
+
+
+class TestDstRangeDefaultAccept(BaseTest):
+    DEFAULT_POLICY = "ACCEPT"
+    IPTABLES_RULES = [
+        "-A INPUT -d 192.168.0.15 -j ACCEPT",
+        "-A INPUT --dst-range 192.168.0.12-192.168.0.25 -j DROP",
+        "-A INPUT -d 192.168.0.22 -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+
+        # No rules check as it might be hitting the default ACCEPT rule
+
+    def test_accept_ip(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "dst_ip == 192.168.0.15", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["dst_ip"] == ipaddress.IPv4Address("192.168.0.15")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[0]
+
+    def test_drop_in_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "dst_ip == 192.168.0.20", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_drop_past_rule(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "dst_ip == 192.168.0.22", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_drop_start_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "dst_ip == 192.168.0.12", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_drop_end_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "dst_ip == 192.168.0.25", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_accept_before_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "dst_ip == 192.168.0.11", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["dst_ip"] == ipaddress.IPv4Address("192.168.0.11")
+
+        # No rules is hit as it hits the default ACCEPT rule
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is None
+
+    def test_accept_after_range(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "dst_ip == 192.168.0.26", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["dst_ip"] == ipaddress.IPv4Address("192.168.0.26")
+
+        # No rules is hit as it hits the default ACCEPT rule
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is None
