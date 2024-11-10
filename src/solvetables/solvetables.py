@@ -724,7 +724,7 @@ def main():
     if default_policy is None:
         match = re.search(
             f"^:{args.chain}\\s+(?P<default_policy>(ACCEPT|DROP|REJECT))",
-            iptables_rules_file,
+            iptables_rules_file.split("\n*filter\n")[-1],
             re.M,
         )
         if match is None:
