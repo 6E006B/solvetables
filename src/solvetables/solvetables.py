@@ -141,8 +141,8 @@ class Rule:
         self.args, unknown_args = self.IPTABLES_PARSER.parse_known_args(
             shlex.split(rule)
         )
-        if unknown_args:
-            print("Warning: Unhandled iptables arguments:", " ".join(unknown_args))
+        # if unknown_args:
+        #     print("Warning: Unhandled iptables arguments:", " ".join(unknown_args))
 
     def get_target(self):
         return self.args.jump
@@ -719,25 +719,42 @@ def main():
     args = parser.parse_args()
 
     iptables_rules_file = args.iptables_save_log.read()
+    solve_tables(
+        iptables_rules_file=iptables_rules_file,
+        chain=args.chain,
+        expression=args.expression,
+        default_policy=args.default_policy,
+        parser=parser,
+    )
 
-    default_policy = args.default_policy
+
+def solve_tables(
+    iptables_rules_file: str,
+    chain: str,
+    expression: str,
+    default_policy: str | None = None,
+    additional_interfaces: list[str] | None = None,
+    parser: argparse.ArgumentParser = None,
+    print=print,
+):
     if default_policy is None:
         match = re.search(
-            f"^:{args.chain}\\s+(?P<default_policy>(ACCEPT|DROP|REJECT))",
+            f"^:{chain}\\s+(?P<default_policy>(ACCEPT|DROP|REJECT))",
             iptables_rules_file.split("\n*filter\n")[-1],
             re.M,
         )
         if match is None:
-            parser.error(
-                f"Unable to detect default policy for {args.chain}, please specify with --default-policy"
-            )
+            if parser is not None:
+                parser.error(
+                    f"Unable to detect default policy for {chain}, please specify with --default-policy"
+                )
         else:
             default_policy = match.group("default_policy")
-            print(f"identified default policy for {args.chain} is {default_policy}")
+            print(f"identified default policy for {chain} is {default_policy}")
 
     interfaces = extract_interfaces(iptables_rules_file)
-    if args.interfaces:
-        interfaces.update(args.interfaces)
+    if additional_interfaces:
+        interfaces.update(additional_interfaces)
     interfaces = list(interfaces)
 
     rules: list[str] = []
@@ -749,9 +766,9 @@ def main():
         default_policy=default_policy, rules=rules, initial_interfaces=interfaces
     )
 
-    expression = SolveTablesExpression(args.expression, st)
-    additional_constraints = expression.get_constraints()
-    model = st.check_and_get_model(chain=args.chain, constraints=additional_constraints)
+    st_expression = SolveTablesExpression(expression, st)
+    additional_constraints = st_expression.get_constraints()
+    model = st.check_and_get_model(chain=chain, constraints=additional_constraints)
     if model is not None:
         print("The identified model is:")
         print(model)
@@ -761,7 +778,7 @@ def main():
         for k, v in translated_model.items():
             print(f"  {k}: {v}")
         print()
-        rules = st.identify_rule_from_model(chain=args.chain, model=model)
+        rules = st.identify_rule_from_model(chain=chain, model=model)
         if rules:
             print(
                 "The iptabeles rule{} hit {}:".format(
@@ -775,6 +792,7 @@ def main():
 
     else:
         print("The provided constraints are not satisfiable.")
+    return model
 
 
 if __name__ == "__main__":
