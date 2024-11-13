@@ -769,6 +769,7 @@ def solve_tables(
     st_expression = SolveTablesExpression(expression, st)
     additional_constraints = st_expression.get_constraints()
     model = st.check_and_get_model(chain=chain, constraints=additional_constraints)
+    translated_model = None
     if model is not None:
         print("The identified model is:")
         print(model)
@@ -792,7 +793,7 @@ def solve_tables(
 
     else:
         print("The provided constraints are not satisfiable.")
-    return model
+    return model, translated_model
 
 
 if __name__ == "__main__":
