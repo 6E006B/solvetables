@@ -1620,3 +1620,146 @@ class TestDstRangeSingleIPDefaultDrop(BaseTest):
             chain="INPUT", constraints=additional_constraints
         )
         assert model is None
+
+
+class TestTCPFlagsDefaultDrop(BaseTest):
+    DEFAULT_POLICY = "DROP"
+    IPTABLES_RULES = [
+        "-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j DROP",
+        "-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -j DROP",
+        "-A INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP",
+        "-A INPUT -p tcp -m tcp --tcp-flags FIN,RST FIN,RST -j DROP",
+        "-A INPUT -p tcp -m tcp --tcp-flags FIN,ACK FIN -j DROP",
+        "-A INPUT -p tcp -m tcp --tcp-flags PSH,ACK PSH -j DROP",
+        "-A INPUT -p tcp -m tcp --tcp-flags ACK,URG URG -j DROP",
+        "-A INPUT --dst-range 192.168.0.12-192.168.0.12 -j ACCEPT",
+    ]
+
+    def test_no_constraints(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression("", st).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        assert model_dict["dst_ip"] == ipaddress.IPv4Address("192.168.0.12")
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[-1]
+
+    def test_syn_set(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "protocol == tcp and tcp_flag_syn == 1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["dst_ip"] == ipaddress.IPv4Address("192.168.0.12")
+        assert model_dict["tcp_flag_syn"] == 1
+        assert model_dict["state"] == "NEW"
+        assert model_dict["tcp_flag_fin"] == 0
+        assert model_dict["tcp_flag_rst"] == 0
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[-1]
+
+    def test_drop_syn_fin(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "protocol == tcp and tcp_flag_syn == 1 and tcp_flag_fin == 1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_syn_fin_set_not_tcp(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "tcp_flag_syn == 1 and tcp_flag_fin == 1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["dst_ip"] == ipaddress.IPv4Address("192.168.0.12")
+        assert model_dict["protocol"] != "tcp"
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[-1]
+
+    def test_drop_syn_rst(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "protocol == tcp and tcp_flag_syn == 1 and tcp_flag_rst == 1", st
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_drop_unset_flags(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "protocol == tcp and tcp_flag_ack == 0 and tcp_flag_fin == 0 and tcp_flag_psh == 0 and tcp_flag_rst == 0 and tcp_flag_syn == 0 and tcp_flag_urg == 0",
+            st,
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is None
+
+    def test_accept_ack_psh_only(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "protocol == tcp and tcp_flag_ack == 1 and tcp_flag_fin == 0 and tcp_flag_psh == 1 and tcp_flag_rst == 0 and tcp_flag_syn == 0 and tcp_flag_urg == 0",
+            st,
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["dst_ip"] == ipaddress.IPv4Address("192.168.0.12")
+        assert model_dict["tcp_flag_ack"] == 1
+        assert model_dict["tcp_flag_fin"] == 0
+        assert model_dict["tcp_flag_psh"] == 1
+        assert model_dict["tcp_flag_rst"] == 0
+        assert model_dict["tcp_flag_syn"] == 0
+        assert model_dict["tcp_flag_urg"] == 0
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[-1]
+
+    def test_accept_rst_only(self, st: SolveTables):
+        additional_constraints = SolveTablesExpression(
+            "protocol == tcp and tcp_flag_ack == 0 and tcp_flag_fin == 0 and tcp_flag_psh == 0 and tcp_flag_rst == 1 and tcp_flag_syn == 0 and tcp_flag_urg == 0",
+            st,
+        ).get_constraints()
+        model = st.check_and_get_model(
+            chain="INPUT", constraints=additional_constraints
+        )
+        assert model is not None
+        model_dict = st.translate_model(model)
+        print(model_dict)
+        assert model_dict["dst_ip"] == ipaddress.IPv4Address("192.168.0.12")
+        assert model_dict["tcp_flag_ack"] == 0
+        assert model_dict["tcp_flag_fin"] == 0
+        assert model_dict["tcp_flag_psh"] == 0
+        assert model_dict["tcp_flag_rst"] == 1
+        assert model_dict["tcp_flag_syn"] == 0
+        assert model_dict["tcp_flag_urg"] == 0
+
+        rules = st.identify_rule_from_model(chain="INPUT", model=model)
+        assert rules is not None
+        assert len(rules) == 1
+        assert rules[0].iptables_rule == self.IPTABLES_RULES[-1]
