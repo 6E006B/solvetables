@@ -54,10 +54,13 @@ def main(args: list[str] = None) -> dict:
     netstat_json = jc.parse("ss" if args.use_ss else "netstat", netstat_content)
     result = defaultdict(dict)
     for row in netstat_json:
-        if row["state"] in ["ESTAB"]:
+        proto = row["netid" if args.use_ss else "proto"]
+        if proto not in ["tcp", "udp"]:
+            logging.warning(f"Skipping unhandled proto '{proto}'.")
+            continue
+        if row["state"] in ["ESTAB", "ESTABLISHED"]:
             continue
         range = row["local_address"]
-        proto = row["netid" if args.use_ss else "proto"]
         port = row["local_port_num"]
         # user = row["user"]
         if range in ["127.0.0.1", "::1", "[::1]"]:
