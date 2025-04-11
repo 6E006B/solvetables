@@ -52,7 +52,7 @@ def create_iptables_argparse() -> argparse.ArgumentParser:
     state_group.add_argument("--ctstate", dest="state")
 
     # parser.add_argument("-m", "--match")
-    # parser.add_argument("--tcp-flags", nargs=2)
+    parser.add_argument("--tcp-flags", nargs=2)
     # parser.add_argument("--icmp-type")
     # parser.add_argument("--set", action="store_true")
     # parser.add_argument("--name")
@@ -128,6 +128,14 @@ class Rule:
         "ah",
         "sctp",
         "mh",
+    ]
+    TCP_FLAGS_ENUM = [
+        "ACK",
+        "FIN",
+        "PSH",
+        "RST",
+        "SYN",
+        "URG",
     ]
     CHAIN_ENUM = ["INPUT", "FORWARD", "OUTPUT"]
     STATE_ENUM = ["NEW", "RELATED", "ESTABLISHED"]
@@ -247,6 +255,31 @@ class Rule:
             states.append(self.STATE_ENUM.index(s))
         return [Or([var == s for s in states])]
 
+    def _create_tcp_flags_constraints(
+        self, vars: dict[str, BitVecRef], args: tuple[str, str]
+    ):
+        mask, comp = args
+        flags_set = []
+        flags_unset = []
+        mask_list = [s.strip() for s in mask.split(",")]
+        comp_list = [s.strip() for s in comp.split(",")]
+        if "ALL" in mask_list:
+            mask_list = self.TCP_FLAGS_ENUM
+        if "ALL" in comp_list:
+            comp_list = self.TCP_FLAGS_ENUM
+        if "NONE" in mask_list:
+            mask_list = []
+        if "NONE" in comp_list:
+            comp_list = []
+        for m in mask_list:
+            if m in comp_list:
+                flags_set.append(m)
+            else:
+                flags_unset.append(m)
+        return [vars[flag] == 1 for flag in flags_set] + [
+            vars[flag] == 0 for flag in flags_unset
+        ]
+
     def _build_constraints(self, st: "SolveTables"):
         sub_constraints = []
         if self.args.not_source:
@@ -318,6 +351,10 @@ class Rule:
         if self.args.state is not None:
             sub_constraints += self._create_state_constraints(
                 st.state_model, self.args.state
+            )
+        if self.args.tcp_flags is not None:
+            sub_constraints += self._create_tcp_flags_constraints(
+                st.get_tcp_flag_models(), self.args.tcp_flags
             )
 
         constraints = And(sub_constraints)
@@ -419,6 +456,12 @@ class SolveTables:
         self.src_port_model: BitVecRef = BitVec("src_port_model", 16)
         self.dst_port_model: BitVecRef = BitVec("dst_port_model", 16)
         self.state_model: BitVecRef = BitVec("state_model", 4)
+        self.tcp_flag_ack_model: BitVecRef = BitVec("tcp_flag_ack_model", 1)
+        self.tcp_flag_fin_model: BitVecRef = BitVec("tcp_flag_fin_model", 1)
+        self.tcp_flag_psh_model: BitVecRef = BitVec("tcp_flag_psh_model", 1)
+        self.tcp_flag_rst_model: BitVecRef = BitVec("tcp_flag_rst_model", 1)
+        self.tcp_flag_syn_model: BitVecRef = BitVec("tcp_flag_syn_model", 1)
+        self.tcp_flag_urg_model: BitVecRef = BitVec("tcp_flag_urg_model", 1)
 
     def reset_rules(self):
         Rule.INTERFACE_ENUM = []
@@ -443,6 +486,16 @@ class SolveTables:
             ULT(self.input_interface_model, len(Rule.INTERFACE_ENUM)),
             ULT(self.output_interface_model, len(Rule.INTERFACE_ENUM)),
             ULT(self.state_model, len(Rule.STATE_ENUM)),
+            If(
+                self.tcp_flag_syn_model == 1,
+                self.state_model == Rule.STATE_ENUM.index("NEW"),
+                True,
+            ),
+            If(
+                self.state_model == Rule.STATE_ENUM.index("NEW"),
+                self.tcp_flag_syn_model == 1,
+                True,
+            ),
             # ULE(0, self.src_ip_model),
             # ULE(self.src_ip_model, 4294967295),
             # ULE(0, self.dst_ip_model),
@@ -468,6 +521,16 @@ class SolveTables:
         # return combined_constraints
         return combined_constraints
         # return simplify(combined_constraints)
+
+    def get_tcp_flag_models(self) -> dict[str, BitVecRef]:
+        return {
+            "ACK": self.tcp_flag_ack_model,
+            "FIN": self.tcp_flag_fin_model,
+            "PSH": self.tcp_flag_psh_model,
+            "RST": self.tcp_flag_rst_model,
+            "SYN": self.tcp_flag_syn_model,
+            "URG": self.tcp_flag_urg_model,
+        }
 
     def check_and_get_model(
         self, chain: str, constraints: None | BoolRef
@@ -516,6 +579,24 @@ class SolveTables:
                 model.eval(self.state_model, model_completion=True).as_long()
             ],
         }
+        tcp_ack = model.eval(self.tcp_flag_ack_model)
+        if isinstance(tcp_ack, BitVecNumRef):
+            translated_model["tcp_flag_ack"] = tcp_ack.as_long()
+        tcp_fin = model.eval(self.tcp_flag_fin_model)
+        if isinstance(tcp_fin, BitVecNumRef):
+            translated_model["tcp_flag_fin"] = tcp_fin.as_long()
+        tcp_psh = model.eval(self.tcp_flag_psh_model)
+        if isinstance(tcp_psh, BitVecNumRef):
+            translated_model["tcp_flag_psh"] = tcp_psh.as_long()
+        tcp_rst = model.eval(self.tcp_flag_rst_model)
+        if isinstance(tcp_rst, BitVecNumRef):
+            translated_model["tcp_flag_rst"] = tcp_rst.as_long()
+        tcp_syn = model.eval(self.tcp_flag_syn_model)
+        if isinstance(tcp_syn, BitVecNumRef):
+            translated_model["tcp_flag_syn"] = tcp_syn.as_long()
+        tcp_urg = model.eval(self.tcp_flag_urg_model)
+        if isinstance(tcp_urg, BitVecNumRef):
+            translated_model["tcp_flag_urg"] = tcp_urg.as_long()
         return translated_model
 
     def identify_rule_from_model(
@@ -531,6 +612,13 @@ class SolveTables:
             self.src_port_model,
             self.dst_port_model,
             self.state_model,
+            self.tcp_flag_ack_model,
+            self.tcp_flag_fin_model,
+            self.tcp_flag_psh_model,
+            self.tcp_flag_psh_model,
+            self.tcp_flag_rst_model,
+            self.tcp_flag_syn_model,
+            self.tcp_flag_urg_model,
         ]:
             if model[var] is not None:
                 model_constraints_list.append(var == model[var])
@@ -586,6 +674,12 @@ class SolveTablesExpression:
             "src_port": st.src_port_model,
             "dst_port": st.dst_port_model,
             "state": st.state_model,
+            "tcp_flag_ack": st.tcp_flag_ack_model,
+            "tcp_flag_fin": st.tcp_flag_fin_model,
+            "tcp_flag_psh": st.tcp_flag_psh_model,
+            "tcp_flag_rst": st.tcp_flag_rst_model,
+            "tcp_flag_syn": st.tcp_flag_syn_model,
+            "tcp_flag_urg": st.tcp_flag_urg_model,
         }
         self.op_table = {
             "==": BitVecRef.__eq__,
@@ -672,6 +766,9 @@ class SolveTablesExpression:
                     top2 = int(operand2)
                 case [_, "ip"]:
                     top2 = int(ipaddress.IPv4Address(operand2))
+                case ["tcp", "flag", flag]:
+                    top2 = int(operand2)
+                    print(f"{operator}({flag}, {top2})")
             sub_constraint = op(top1, top2)
         return sub_constraint
 
