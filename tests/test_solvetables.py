@@ -509,7 +509,7 @@ class TestReturnChain(BaseTest):
         "-A INPUT -s 0.0.0.0/0 -d 0.0.0.0/0 -j DOS_PROTECT",
         "-A INPUT -s 0.0.0.0/0 -d 0.0.0.0/0 -p tcp -m tcp --dport 22 -j DROP",
         "-A INPUT -p tcp -s 192.168.0.0/16 -d 192.168.0.0/16 -j ACCEPT",
-        "-A DOS_PROTECT -p tcp -s 0.0.0.0/0 -d 0.0.0.0/0 -m tcp --tcp-flags RST RST -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 5 -j RETURN",
+        "-A DOS_PROTECT -p tcp -s 0.0.0.0/0 -d 0.0.0.0/0 -m tcp -m hashlimit --hashlimit-upto 1/sec --hashlimit-burst 5 -j RETURN",
         "-A DOS_PROTECT -p tcp -s 0.0.0.0/0 -d 0.0.0.0/0 -m tcp --tcp-flags RST RST -j DROP",
         "-A DOS_PROTECT -p tcp -s 0.0.0.0/0 -d 0.0.0.0/0 -j ACCEPT",
     ]
